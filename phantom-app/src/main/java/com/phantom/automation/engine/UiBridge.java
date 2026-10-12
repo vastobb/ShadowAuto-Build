@@ -179,6 +179,24 @@ final class UiBridge {
         return false;
     }
 
+    /** Best-effort foreground app package on a display; "" when undetectable. */
+    String foregroundPackage(int displayId) {
+        try {
+            for (AccessibilityWindowInfo window : orderedWindows(displayId, false)) {
+                if (window.getType() != AccessibilityWindowInfo.TYPE_APPLICATION) {
+                    continue;
+                }
+                AccessibilityNodeInfo root = window.getRoot();
+                if (root != null && root.getPackageName() != null) {
+                    return root.getPackageName().toString();
+                }
+            }
+        } catch (Throwable e) {
+            logs.info("detect foreground package failed: " + e.getMessage());
+        }
+        return "";
+    }
+
     boolean setText(int displayId, String text) {
         try {
             AccessibilityNodeInfo editable = findEditable(displayId);

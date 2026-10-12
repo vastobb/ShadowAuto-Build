@@ -40,28 +40,44 @@ final class McpSessions {
         this.appCatalog = new AppCatalog(logs);
     }
 
-    synchronized JsonObject openSession(String sessionId, int width, int height) throws Exception {
+    synchronized JsonObject openSession(String sessionId, int width, int height, String codecPref)
+            throws Exception {
         String id = Config.empty(sessionId) ? "mcp-" + nextId.getAndIncrement() : sessionId.trim();
         closeSessionLocked(id);
-        DisplaySpec spec = DisplaySpec.current(logs);
-        int w = width > 0 ? width : spec.width;
-        int h = height > 0 ? height : spec.height;
-        w = Math.max(320, Math.min(1920, w));
-        h = Math.max(320, Math.min(1920, h));
-        // Null output surface: the display still exists for accessibility and
-        // input injection; still frames are captured via the capture surface.
-        VirtualDisplaySession display = VirtualDisplaySession.create(w, h, spec.dpi, null);
-        Session session = new Session(id, display);
+        Session session = new Session(id);
+        session.state = SessionState.CREATING;
         sessions.put(id, session);
-        logs.task(id, "mcp session opened on virtual display " + display.displayId
-                + " " + display.width + "x" + display.height + " dpi=" + display.dpi);
-        JsonObject result = new JsonObject();
-        result.addProperty("sessionId", id);
-        result.addProperty("displayId", display.displayId);
-        result.addProperty("width", display.width);
-        result.addProperty("height", display.height);
-        result.addProperty("dpi", display.dpi);
-        return result;
+        try {
+            DisplaySpec spec = DisplaySpec.current(logs);
+            int w = width > 0 ? width : spec.width;
+            int h = height > 0 ? height : spec.height;
+            w = Math.max(320, Math.min(1920, w));
+            h = Math.max(320, Math.min(1920, h));
+            // The encoder surface feeds the virtual display; still frames use
+            // the capture surface and the encoded stream feeds preview + recording.
+            VideoStreamer video = new VideoStreamer(logs, id, w, h, codecPref, 0, 0);
+            VirtualDisplaySession display = VirtualDisplaySession.create(
+                    video.width(), video.height(), spec.dpi, video.inputSurface());
+            session.display = display;
+            session.video = video;
+            session.createdAt = System.currentTimeMillis();
+            session.state = SessionState.READY;
+            video.start();
+            logs.task(id, "session opened on virtual display " + display.displayId
+                    + " " + display.width + "x" + display.height + " dpi=" + display.dpi
+                    + " codec=" + video.mime());
+        } catch (Throwable e) {
+            session.state = SessionState.ERROR;
+            session.lastError = e.getMessage() == null ? String.valueOf(e) : e.getMessage();
+            closeSessionLocked(id);
+            throw e;
+        }
+        return sessionInfo(session);
+    }
+
+    /** Legacy shape: open with automatic codec. */
+    synchronized JsonObject openSession(String sessionId, int width, int height) throws Exception {
+        return openSession(sessionId, width, height, VideoStreamer.CODEC_AUTO);
     }
 
     synchronized JsonObject closeSession(String sessionId) {
@@ -69,7 +85,7 @@ final class McpSessions {
             for (String id : new ArrayList<>(sessions.keySet())) {
                 closeSessionLocked(id);
             }
-            logs.task("mcp sessions closed");
+            logs.task("sessions closed");
         } else {
             closeSessionLocked(sessionId.trim());
         }
@@ -78,17 +94,40 @@ final class McpSessions {
         return result;
     }
 
+    synchronized JsonObject setRecordingState(String sessionId, String state) {
+        Session session = require(sessionId);
+        String value = Config.empty(state) ? "idle" : state.trim().toLowerCase(Locale.US);
+        if (!value.equals("idle") && !value.equals("recording")
+                && !value.equals("paused") && !value.equals("error")) {
+            throw new IllegalArgumentException("unsupported recording state: " + state);
+        }
+        session.recordingState = value;
+        logs.task(session.id, "recording state -> " + value);
+        return sessionInfo(session);
+    }
+
     synchronized JsonArray statusArray() {
         JsonArray array = new JsonArray();
         for (Session session : sessions.values()) {
-            JsonObject item = new JsonObject();
-            item.addProperty("sessionId", session.id);
-            item.addProperty("displayId", session.display == null ? -1 : session.display.displayId);
-            item.addProperty("width", session.display == null ? 0 : session.display.width);
-            item.addProperty("height", session.display == null ? 0 : session.display.height);
-            array.add(item);
+            array.add(sessionInfo(session));
         }
         return array;
+    }
+
+    private JsonObject sessionInfo(Session session) {
+        JsonObject item = new JsonObject();
+        item.addProperty("sessionId", session.id);
+        item.addProperty("state", session.state);
+        item.addProperty("displayId", session.display == null ? -1 : session.display.displayId);
+        item.addProperty("width", session.display == null ? 0 : session.display.width);
+        item.addProperty("height", session.display == null ? 0 : session.display.height);
+        item.addProperty("dpi", session.display == null ? 0 : session.display.dpi);
+        item.addProperty("codec", session.video == null ? "" : session.video.mime());
+        item.addProperty("foregroundApp", session.foregroundApp);
+        item.addProperty("createdAt", session.createdAt);
+        item.addProperty("recordingState", session.recordingState);
+        item.addProperty("lastError", session.lastError);
+        return item;
     }
 
     synchronized JsonArray listApps() {
@@ -108,14 +147,28 @@ final class McpSessions {
         if (Config.empty(packageName)) {
             throw new IllegalArgumentException("packageName is required");
         }
-        appCatalog.launchPackage(session.id, packageName.trim(), session.display.displayId);
-        logs.task(session.id, "mcp launched " + packageName.trim()
+        try {
+            appCatalog.launchPackage(session.id, packageName.trim(), session.display.displayId);
+            session.foregroundApp = packageName.trim();
+            session.state = SessionState.RUNNING;
+            session.lastError = "";
+        } catch (Throwable e) {
+            session.state = SessionState.ERROR;
+            session.lastError = e.getMessage() == null ? String.valueOf(e) : e.getMessage();
+            throw e;
+        }
+        logs.task(session.id, "launched " + packageName.trim()
                 + " on virtual display " + session.display.displayId);
         SystemClock.sleep(1500);
-        JsonObject result = new JsonObject();
+        try {
+            String top = getUi().foregroundPackage(session.display.displayId);
+            if (!Config.empty(top)) {
+                session.foregroundApp = top;
+            }
+        } catch (Throwable ignored) {
+        }
+        JsonObject result = sessionInfo(session);
         result.addProperty("value", "launched");
-        result.addProperty("sessionId", session.id);
-        result.addProperty("displayId", session.display.displayId);
         return result;
     }
 
@@ -334,8 +387,12 @@ final class McpSessions {
     private Session require(String sessionId) {
         Session session = sessionOrNull(sessionId);
         if (session == null || session.display == null) {
-            throw new IllegalStateException("mcp session not found: " + sessionId
-                    + " (call openSession first)");
+            throw new IllegalStateException("session not found: " + sessionId
+                    + " (call openSession first; ids are never reused while open)");
+        }
+        if (SessionState.ERROR.equals(session.state)) {
+            throw new IllegalStateException("session " + session.id + " is in ERROR: "
+                    + session.lastError + " (close it and open a new session)");
         }
         return session;
     }
@@ -367,14 +424,26 @@ final class McpSessions {
 
     private void closeSessionLocked(String sessionId) {
         Session session = sessions.remove(sessionId);
-        if (session != null && session.display != null) {
+        if (session == null) {
+            return;
+        }
+        session.state = SessionState.STOPPING;
+        if (session.video != null) {
+            try {
+                session.video.stop();
+            } catch (Throwable ignored) {
+            }
+            session.video = null;
+        }
+        if (session.display != null) {
             try {
                 session.display.release();
             } catch (Throwable ignored) {
             }
             session.display = null;
-            logs.task(session.id, "mcp session closed");
         }
+        session.state = SessionState.STOPPED;
+        logs.task(session.id, "session closed");
     }
 
     private UiBridge getUi() {
@@ -457,10 +526,28 @@ final class McpSessions {
     private static final class Session {
         final String id;
         VirtualDisplaySession display;
+        VideoStreamer video;
+        String state = SessionState.READY;
+        String foregroundApp = "";
+        long createdAt;
+        String recordingState = "idle";
+        String lastError = "";
 
-        Session(String id, VirtualDisplaySession display) {
+        Session(String id) {
             this.id = id;
-            this.display = display;
+        }
+    }
+
+    /** Explicit session lifecycle; ERROR never transitions back to READY. */
+    static final class SessionState {
+        static final String CREATING = "CREATING";
+        static final String READY = "READY";
+        static final String RUNNING = "RUNNING";
+        static final String STOPPING = "STOPPING";
+        static final String STOPPED = "STOPPED";
+        static final String ERROR = "ERROR";
+
+        private SessionState() {
         }
     }
 }

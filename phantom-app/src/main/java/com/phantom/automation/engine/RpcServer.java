@@ -111,11 +111,21 @@ final class RpcServer {
                 return JsonRpc.result(id, engine.mcp().openSession(
                         JsonRpc.text(params, "sessionId"),
                         integer(params, "width", 0),
-                        integer(params, "height", 0)
+                        integer(params, "height", 0),
+                        JsonRpc.text(params, "codec")
                 ));
             }
             if ("closeSession".equals(method)) {
                 return JsonRpc.result(id, engine.mcp().closeSession(JsonRpc.text(params, "sessionId")));
+            }
+            if ("codecCaps".equals(method)) {
+                return JsonRpc.result(id, VideoStreamer.capabilities());
+            }
+            if ("setRecordingState".equals(method)) {
+                return JsonRpc.result(id, engine.mcp().setRecordingState(
+                        JsonRpc.text(params, "sessionId"),
+                        JsonRpc.text(params, "state")
+                ));
             }
             if ("listApps".equals(method)) {
                 JsonObject value = new JsonObject();
