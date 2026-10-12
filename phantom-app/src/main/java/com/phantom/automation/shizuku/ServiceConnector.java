@@ -21,6 +21,7 @@ public final class ServiceConnector {
     private final Context context;
     private final Listener listener;
     private ServiceConnection connection;
+    private Shizuku.UserServiceArgs boundArgs;
 
     public ServiceConnector(Context context, Listener listener) {
         this.context = context.getApplicationContext();
@@ -35,8 +36,8 @@ public final class ServiceConnector {
                 new ComponentName(context.getPackageName(),
                         PhantomUserService.class.getName()))
                 .daemon(false)
-                .processNameSuffix("phantom_priv")
-                .versionCode(1);
+                .processNameSuffix("phantom_priv");
+        boundArgs = args;
         connection = new ServiceConnection() {
             @Override
             public void onServiceConnected(ComponentName name, IBinder binder) {
@@ -67,10 +68,11 @@ public final class ServiceConnector {
             return;
         }
         try {
-            Shizuku.unbindUserService(connection);
+            Shizuku.unbindUserService(boundArgs, connection, false);
         } catch (Throwable ignored) {
         }
         connection = null;
+        boundArgs = null;
     }
 
     public static String describeError(RemoteException e) {
