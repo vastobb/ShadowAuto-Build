@@ -1,0 +1,209 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0F1419"
+    android:padding="20dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Settings"
+            android:textColor="#E8EDF2"
+            android:textSize="22sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Default session"
+            android:textColor="#5AC8FA"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <EditText
+            android:id="@+id/setDefaultSession"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="session id (e.g. mcp-1)"
+            android:textColor="#E8EDF2"
+            android:textColorHint="#5A6672" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Display defaults"
+            android:textColor="#5AC8FA"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <EditText
+                android:id="@+id/setWidth"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="Width"
+                android:inputType="number"
+                android:textColor="#E8EDF2"
+                android:textColorHint="#5A6672" />
+
+            <EditText
+                android:id="@+id/setHeight"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:hint="Height"
+                android:inputType="number"
+                android:textColor="#E8EDF2"
+                android:textColorHint="#5A6672" />
+
+            <EditText
+                android:id="@+id/setDpi"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:hint="DPI"
+                android:inputType="number"
+                android:textColor="#E8EDF2"
+                android:textColorHint="#5A6672" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Recording codec"
+            android:textColor="#5AC8FA"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <Spinner
+            android:id="@+id/setCodec"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal">
+
+            <EditText
+                android:id="@+id/setBitRate"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="Bitrate bps (auto)"
+                android:inputType="number"
+                android:textColor="#E8EDF2"
+                android:textColorHint="#5A6672" />
+
+            <EditText
+                android:id="@+id/setFrameRate"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:hint="FPS (8)"
+                android:inputType="number"
+                android:textColor="#E8EDF2"
+                android:textColorHint="#5A6672" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Model endpoint (legacy autonomous tasks)"
+            android:textColor="#5AC8FA"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <EditText
+            android:id="@+id/setApiBase"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="http://127.0.0.1:8410/v1"
+            android:inputType="textUri"
+            android:textColor="#E8EDF2"
+            android:textColorHint="#5A6672" />
+
+        <EditText
+            android:id="@+id/setApiKey"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="API key (optional)"
+            android:inputType="textPassword"
+            android:textColor="#E8EDF2"
+            android:textColorHint="#5A6672" />
+
+        <EditText
+            android:id="@+id/setModel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="phantom-automation"
+            android:textColor="#E8EDF2"
+            android:textColorHint="#5A6672" />
+
+        <Button
+            android:id="@+id/saveButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Save settings" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="OCR models"
+            android:textColor="#5AC8FA"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/ocrStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="OCR status unknown"
+            android:textColor="#9AA7B4"
+            android:textSize="13sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/ocrProvisionButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Download models" />
+
+            <Button
+                android:id="@+id/ocrRefreshButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:text="Check status" />
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>

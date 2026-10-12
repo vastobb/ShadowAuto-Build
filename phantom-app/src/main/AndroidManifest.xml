@@ -39,6 +39,22 @@
             android:exported="false"
             android:configChanges="orientation|screenSize|keyboardHidden" />
 
+        <activity
+            android:name=".ui.LauncherActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".ui.McpSetupActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".ui.SettingsActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".ui.LogsActivity"
+            android:exported="false" />
+
         <service
             android:name=".service.PhantomService"
             android:exported="false"

@@ -52,6 +52,14 @@ public final class MainActivity extends Activity
         });
         findViewById(R.id.sessionsButton).setOnClickListener(v ->
                 startActivity(new android.content.Intent(this, SessionsActivity.class)));
+        findViewById(R.id.launcherButton).setOnClickListener(v ->
+                startActivity(new android.content.Intent(this, LauncherActivity.class)));
+        findViewById(R.id.mcpButton).setOnClickListener(v ->
+                startActivity(new android.content.Intent(this, McpSetupActivity.class)));
+        findViewById(R.id.settingsButton).setOnClickListener(v ->
+                startActivity(new android.content.Intent(this, SettingsActivity.class)));
+        findViewById(R.id.logsButton).setOnClickListener(v ->
+                startActivity(new android.content.Intent(this, LogsActivity.class)));
         shizuku = new ShizukuManager(this);
         daemon = new DaemonController(this, this);
         shizuku.attach();
