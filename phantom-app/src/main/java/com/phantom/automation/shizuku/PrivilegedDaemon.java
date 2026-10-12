@@ -1,18 +1,19 @@
 package com.phantom.automation.shizuku;
 
-/** Lifecycle stub for the privileged RPC daemon (engine lands in M2). */
+/** Wires the Shizuku UserService Binder to the engine host. */
 final class PrivilegedDaemon {
     private PrivilegedDaemon() {
     }
 
     static int getState() {
-        return 0;
+        return com.phantom.automation.engine.EngineHost.getState();
     }
 
     static int start(int port) {
-        return 0;
+        return com.phantom.automation.engine.EngineHost.start(port);
     }
 
     static void stop() {
+        com.phantom.automation.engine.EngineHost.stop();
     }
 }

@@ -6,15 +6,22 @@ import android.widget.Button;
 import android.widget.TextView;
 
 import com.phantom.automation.R;
+import com.phantom.automation.shizuku.DaemonController;
 import com.phantom.automation.shizuku.ShizukuManager;
 
-/** Phantom home: Shizuku state, permission entry point, service overview. */
-public final class MainActivity extends Activity implements ShizukuManager.Listener {
+/** Phantom home: Shizuku state, permission entry point, daemon lifecycle. */
+public final class MainActivity extends Activity
+        implements ShizukuManager.Listener, DaemonController.Listener {
     private ShizukuManager shizuku;
+    private DaemonController daemon;
+    private ShizukuManager.State shizukuState = ShizukuManager.State.UNAVAILABLE;
     private TextView statusText;
     private TextView detailText;
     private Button permissionButton;
     private Button reconnectButton;
+    private TextView daemonText;
+    private Button startButton;
+    private Button stopButton;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -24,14 +31,29 @@ public final class MainActivity extends Activity implements ShizukuManager.Liste
         detailText = findViewById(R.id.shizukuDetail);
         permissionButton = findViewById(R.id.permissionButton);
         reconnectButton = findViewById(R.id.reconnectButton);
+        daemonText = findViewById(R.id.daemonStatus);
+        startButton = findViewById(R.id.startButton);
+        stopButton = findViewById(R.id.stopButton);
         permissionButton.setOnClickListener(v -> onPermission());
         reconnectButton.setOnClickListener(v -> {
             if (shizuku != null) {
                 shizuku.refresh();
             }
         });
+        startButton.setOnClickListener(v -> {
+            if (daemon != null) {
+                daemon.start();
+            }
+        });
+        stopButton.setOnClickListener(v -> {
+            if (daemon != null) {
+                daemon.stop();
+            }
+        });
         shizuku = new ShizukuManager(this);
+        daemon = new DaemonController(this, this);
         shizuku.attach();
+        renderDaemon(DaemonController.State.IDLE, getString(R.string.daemon_idle_detail));
     }
 
     @Override
@@ -39,6 +61,10 @@ public final class MainActivity extends Activity implements ShizukuManager.Liste
         if (shizuku != null) {
             shizuku.detach();
             shizuku = null;
+        }
+        if (daemon != null) {
+            daemon.release();
+            daemon = null;
         }
         super.onDestroy();
     }
@@ -55,7 +81,15 @@ public final class MainActivity extends Activity implements ShizukuManager.Liste
 
     @Override
     public void onStateChanged(ShizukuManager.State state) {
-        runOnUiThread(() -> render(state));
+        runOnUiThread(() -> {
+            shizukuState = state;
+            render(state);
+        });
+    }
+
+    @Override
+    public void onState(DaemonController.State state, String detail) {
+        runOnUiThread(() -> renderDaemon(state, detail));
     }
 
     private void render(ShizukuManager.State state) {
@@ -90,5 +124,12 @@ public final class MainActivity extends Activity implements ShizukuManager.Liste
                 permissionButton.setEnabled(false);
                 break;
         }
+        startButton.setEnabled(state == ShizukuManager.State.READY);
+    }
+
+    private void renderDaemon(DaemonController.State state, String detail) {
+        daemonText.setText(detail);
+        stopButton.setEnabled(state == DaemonController.State.RUNNING
+                || state == DaemonController.State.ERROR);
     }
 }
