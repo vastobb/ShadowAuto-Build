@@ -27,5 +27,5 @@
             android:textIsSelectable="true"
             android:textSize="12sp"
             android:typeface="monospace" />
-    </LinearLayout>
+    </ScrollView>
 </LinearLayout>
