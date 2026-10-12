@@ -9,10 +9,8 @@ import android.util.Log;
 
 /**
  * Privileged entry point. Shizuku instantiates this in a shell-UID (or root)
- * process and uses it as the service Binder; the automation engine runs here,
- * exactly where the legacy {@code app_process} shell ran. The UI talks to it
- * through plain Binder transactions (no AIDL toolchain needed), and all
- * automation traffic flows over the loopback RPC daemon (no LAN).
+ * process via the {@code (Context)} constructor and uses it as the service
+ * Binder; the automation engine runs here. Plain Binder protocol (no AIDL):
  *
  * <p>Protocol (all calls target the UserService Binder directly):
  * <ul>
@@ -20,8 +18,13 @@ import android.util.Log;
  *   <li>2 {@code startDaemon}: arg int port, reply int (0=ok, else failed).
  *   <li>3 {@code stopDaemon}: no args/reply payload.
  *   <li>4 {@code getError}: no args, reply string (last daemon error).
+ *   <li>5 {@code exec}: args String command + int timeoutMs, reply int exit + String output.
  *   <li>16777115 Shizuku destroy: cleanup, then exit this process.
  * </ul>
+ *
+ * <p>NOTE: this runs in a remote process Shizuku spawns. Keep construction
+ * side-effect free apart from logging: any throw here means Shizuku logs
+ * server-side and the client NEVER gets a callback.
  */
 public final class PhantomUserService extends Binder {
     static final String DESCRIPTOR = "com.phantom.automation.shizuku.IPhantomService";
@@ -33,16 +36,17 @@ public final class PhantomUserService extends Binder {
     /** Fixed Shizuku destroy transaction: cleanup, then exit this process. */
     static final int DESTROY_CODE = 16777115;
 
-    private static final String TAG = "PhantomUserService";
+    private static final String TAG = "PhantomDaemon";
 
     public PhantomUserService() {
-        attachInterface(null, DESCRIPTOR);
-        Log.i(TAG, "created");
+        Log.i(TAG, "PhantomUserService() default constructor: pid=" + android.os.Process.myPid()
+                + " uid=" + android.os.Process.myUid());
     }
 
     public PhantomUserService(Context context) {
-        attachInterface(null, DESCRIPTOR);
-        Log.i(TAG, "created with context");
+        Log.i(TAG, "PhantomUserService(Context) constructor: pid=" + android.os.Process.myPid()
+                + " uid=" + android.os.Process.myUid()
+                + " context=" + (context == null ? "null" : context.getClass().getName()));
     }
 
     @Override
@@ -63,6 +67,7 @@ public final class PhantomUserService extends Binder {
         try {
             data.enforceInterface(DESCRIPTOR);
         } catch (SecurityException e) {
+            Log.w(TAG, "interface token mismatch", e);
             return false;
         }
         switch (code) {
@@ -75,12 +80,15 @@ public final class PhantomUserService extends Binder {
                 return true;
             case TX_START_DAEMON: {
                 int port = data.readInt();
+                Log.i(TAG, "startDaemon port=" + port);
                 int result = PrivilegedDaemon.start(port);
+                Log.i(TAG, "startDaemon result=" + result);
                 reply.writeNoException();
                 reply.writeInt(result);
                 return true;
             }
             case TX_STOP_DAEMON:
+                Log.i(TAG, "stopDaemon");
                 PrivilegedDaemon.stop();
                 reply.writeNoException();
                 return true;

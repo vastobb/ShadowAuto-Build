@@ -80,3 +80,28 @@ jobs:
             unzip -l "$APK" | grep -q "$res" || { echo "missing resource: $res"; exit 1; }
           done
           echo "identity check passed"
+
+      - name: Verify UserService packaging in APK
+        run: |
+          export ANDROID_HOME=/usr/local/lib/android/sdk
+          AAPT=$ANDROID_HOME/build-tools/36.0.0/aapt2
+          APK=phantom-app/build/outputs/apk/debug/phantom-app-debug.apk
+          $AAPT dump xmltree "$APK" --file AndroidManifest.xml > manifest.txt
+          grep -q "PhantomUserService" manifest.txt
+          grep -q "ShizukuProvider" manifest.txt
+          grep -q 'com.phantom.automation.shizuku' manifest.txt
+          python3 - "$APK" <<'EOF'
+          import sys, zipfile
+          blob = b"".join(z.read(n) for n in (z := zipfile.ZipFile(sys.argv[1])).namelist() if n.endswith(".dex"))
+          required = [
+              b"Lcom/phantom/automation/shizuku/PhantomUserService;",
+              b"Lrikka/shizuku/Shizuku;",
+              b"Lrikka/shizuku/ShizukuProvider;",
+              b"Lmoe/shizuku/server/IShizukuServiceConnection;",
+          ]
+          missing = [c.decode() for c in required if c not in blob]
+          if missing:
+              print("missing dex classes:", missing)
+              sys.exit(1)
+          print("userservice packaging check passed")
+          EOF

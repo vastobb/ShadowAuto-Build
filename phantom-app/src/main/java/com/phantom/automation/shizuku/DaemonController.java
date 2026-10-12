@@ -42,7 +42,7 @@ public final class DaemonController implements ServiceConnector.Listener {
     private final Listener listener;
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private final Handler watchdog = new Handler(Looper.getMainLooper());
-    private final DiagLog diag = new DiagLog();
+    private final DiagLog diag = DiagStore.get();
     private final DaemonLifecycle lifecycle = new DaemonLifecycle(diag);
     private ServiceConnector connector;
     private PhantomUserService.Client client;

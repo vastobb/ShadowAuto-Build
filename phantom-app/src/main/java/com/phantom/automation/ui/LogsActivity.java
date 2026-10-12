@@ -14,6 +14,7 @@ import com.google.android.material.button.MaterialButton;
 import com.google.android.material.snackbar.Snackbar;
 import com.phantom.automation.R;
 import com.phantom.automation.rpc.Rpc;
+import com.phantom.automation.shizuku.DiagStore;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -50,6 +51,7 @@ public final class LogsActivity extends Activity {
         findViewById(R.id.logRefresh).setOnClickListener(v -> refresh());
         findViewById(R.id.copyButton).setOnClickListener(v -> copy());
         findViewById(R.id.exportButton).setOnClickListener(v -> export());
+        findViewById(R.id.diagButton).setOnClickListener(v -> copyDiagnostics());
         com.google.android.material.textfield.TextInputEditText filter =
                 findViewById(R.id.sessionFilter);
         filter.addTextChangedListener(new SimpleWatcher(text -> {
@@ -61,6 +63,7 @@ public final class LogsActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        renderDiagnostics();
         refresh();
     }
 
@@ -125,6 +128,45 @@ public final class LogsActivity extends Activity {
 
     private String filteredText() {
         return logView.getText().toString();
+    }
+
+    private void copyDiagnostics() {
+        StringBuilder out = new StringBuilder();
+        out.append("Phantom diagnostics\n");
+        try {
+            out.append("shizukuVersion=").append(rikka.shizuku.Shizuku.getVersion()).append('\n');
+        } catch (Throwable e) {
+            out.append("shizukuVersion=unavailable\n");
+        }
+        try {
+            out.append("shizukuUid=").append(rikka.shizuku.Shizuku.getUid()).append('\n');
+        } catch (Throwable e) {
+            out.append("shizukuUid=unavailable\n");
+        }
+        out.append("appVersion=").append(com.phantom.automation.BuildConfig.VERSION_NAME)
+                .append(" (").append(com.phantom.automation.BuildConfig.VERSION_CODE).append(")\n");
+        for (String line : DiagStore.get().snapshot()) {
+            out.append(line).append('\n');
+        }
+        ClipboardManager clipboard = getSystemService(ClipboardManager.class);
+        if (clipboard != null) {
+            clipboard.setPrimaryClip(ClipData.newPlainText("Phantom diagnostics", out.toString()));
+            snack("Diagnostics copied — send them with the logcat excerpt.");
+        }
+    }
+
+    private void renderDiagnostics() {
+        TextView diag = findViewById(R.id.diagText);
+        List<String> lines = DiagStore.get().snapshot();
+        if (lines.isEmpty()) {
+            diag.setText("No daemon transitions yet this process run.");
+            return;
+        }
+        StringBuilder out = new StringBuilder();
+        for (String line : lines) {
+            out.append(line).append('\n');
+        }
+        diag.setText(out.toString());
     }
 
     private void copy() {
