@@ -26,8 +26,11 @@ only, and OCR reports exactly what is missing.
 ## Startup
 
 Home shows Shizuku state (with install/start/permission guidance and a
-manual Reconnect) and daemon state (Start verifies with a loopback ping;
-Stop releases displays/encoders). Then:
+manual Reconnect) and daemon state (Start / Restart / Stop / Recover).
+Recover needs no adb: it identifies the port-43110 owner from kernel
+tables via the Shizuku service, stops ONLY positively identified legacy
+shells, restarts Phantom's daemon, and verifies the Phantom handshake
+before reporting success. Unknown owners are refused with an explanation.
 
 - Sessions: create (resolution + `auto`/`avc`/`hevc`), view live
   (H.264/H.265), tap the preview (display-local mapping), back/scroll,
@@ -47,18 +50,13 @@ adb forward tcp:43110 tcp:43110
 python3 -m pip install -r mcp/requirements.txt
 ```
 
-Project `opencode.json` (see `mcp/opencode.json.example`):
-
-```jsonc
-{
-  "$schema": "https://opencode.ai/config.json",
-  "mcp": { "servers": { "phantom": {
-    "type": "local",
-    "command": ["python3", "<repo>/mcp/mcp_server.py"],
-    "environment": {"SHADOWAUTO_HOST": "127.0.0.1", "SHADOWAUTO_PORT": "43110"}
-  } } }
-}
-```
+In the Phantom app, open MCP Setup, enter your machine's repo checkout
+path, and copy the generated config into OpenCode's `opencode.json`
+(see `mcp/opencode.json.example`). Copy is only offered once the path is
+a real absolute path — no `<repo>` placeholders. The screen's Check
+button verifies the live daemon protocol (app, version, method count).
+The generated config looks like `mcp/opencode.json.example` with your
+absolute path filled in.
 
 `opencode mcp list` → `phantom connected`. Flow: `check_connection` →
 `open_session` → `list_apps` → `launch_app` → loop (`dump_ui` /

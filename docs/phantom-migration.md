@@ -54,18 +54,24 @@
 ## Verification (actual)
 
 - CI `Build APK`: `phantom-app:assembleDebug` + legacy APKs green;
-  `:phantom-app:testDebugUnitTest` green (tar/provisioning JVM tests).
-- Python: 11/11 unittest green (RPC framing incl. new methods, SSE,
-  model list). MCP stdio handshake re-verified after rename: 27/27 tools
-  listed, structured unreachable-shell error without device.
+  `:phantom-app:testDebugUnitTest` green (tar/provisioning, RPC registry,
+  stale-daemon parsing JVM tests).
+- CI identity gate: `aapt2 dump badging` asserts
+  `application-label:'Phantom'`, launcher `label='Phantom'`, plus icon /
+  nav / menu resources present in the APK.
+- Python: 15/15 unittest green (RPC framing incl. new methods, SSE,
+  model list, dispatch/backend/MCP compat). MCP stdio handshake
+  re-verified: 27/27 tools listed.
 - APK dex check: Phantom + Shizuku classes present in `phantom-app-debug`.
 
 ## Genuine remaining limitations
 
 1. No device in this environment: on-device behavior (UserService start,
    virtual-display creation under Shizuku, input injection, HEVC encoder
-   presence, OCR native load, recording output, upgrade install) is
-   **not verified** — needs a Shizuku-capable device.
+   presence, OCR native load, recording output, upgrade install, and the
+   new stale-daemon recovery path) is **not verified** — needs a
+   Shizuku-capable device. The recovery logic's parsing/decisions are
+   JVM-tested; its shell-command execution is not.
 2. `Shizuku.bindUserService`/`unbindUserService` signatures and
    `UserServiceArgs` options were matched to 13.1.5 at compile time;
    runtime behavior (daemon mode, process naming) needs device proof.
