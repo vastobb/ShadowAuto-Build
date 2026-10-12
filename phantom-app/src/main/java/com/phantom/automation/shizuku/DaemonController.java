@@ -39,6 +39,7 @@ public final class DaemonController implements ServiceConnector.Listener {
     private ServiceConnector connector;
     private PhantomUserService.Client client;
     private volatile State state = State.IDLE;
+    private volatile RecoveryController.Listener pendingRecovery;
 
     public DaemonController(Context context, Listener listener) {
         this.context = context.getApplicationContext();
@@ -57,6 +58,7 @@ public final class DaemonController implements ServiceConnector.Listener {
     }
 
     public void stop() {
+        pendingRecovery = null;
         io.execute(() -> {
             try {
                 if (client != null) {
@@ -71,6 +73,49 @@ public final class DaemonController implements ServiceConnector.Listener {
             }
             set(State.IDLE, "Privileged service stopped.");
         });
+    }
+
+    /** Stop, rebind, and start again. */
+    public void restart() {
+        pendingRecovery = null;
+        io.execute(() -> {
+            try {
+                if (client != null) {
+                    client.stopDaemon();
+                }
+            } catch (RemoteException ignored) {
+            } finally {
+                client = null;
+            }
+            if (connector != null) {
+                connector.unbind();
+            }
+            set(State.BINDING, "Restarting privileged service…");
+            if (connector == null) {
+                connector = new ServiceConnector(context, this);
+            }
+            connector.bind();
+        });
+    }
+
+    /**
+     * Recover a stale/foreign port holder without manual adb: identify via
+     * kernel tables, stop ONLY positively identified legacy shells, start
+     * Phantom's daemon, verify hello. Reports each step.
+     */
+    public void recover(RecoveryController.Listener recovery) {
+        pendingRecovery = null;
+        if (client != null) {
+            RecoveryController controller = new RecoveryController(client, recovery);
+            io.execute(controller::run);
+            return;
+        }
+        pendingRecovery = recovery;
+        set(State.BINDING, "Binding privileged service for recovery…");
+        if (connector == null) {
+            connector = new ServiceConnector(context, this);
+        }
+        connector.bind();
     }
 
     public void release() {
@@ -88,6 +133,26 @@ public final class DaemonController implements ServiceConnector.Listener {
     @Override
     public void onConnected(PhantomUserService.Client service) {
         this.client = service;
+        RecoveryController.Listener recovery = pendingRecovery;
+        pendingRecovery = null;
+        if (recovery != null) {
+            RecoveryController controller = new RecoveryController(service,
+                    new RecoveryController.Listener() {
+                        @Override
+                        public void onStep(String message) {
+                            recovery.onStep(message);
+                            set(State.STARTING, message);
+                        }
+
+                        @Override
+                        public void onDone(boolean ok, String message) {
+                            recovery.onDone(ok, message);
+                            set(ok ? State.RUNNING : State.ERROR, message);
+                        }
+                    });
+            io.execute(controller::run);
+            return;
+        }
         set(State.STARTING, "Starting daemon on 127.0.0.1:" + RPC_PORT + "…");
         io.execute(() -> {
             try {

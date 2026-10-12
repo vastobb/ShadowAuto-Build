@@ -2,6 +2,9 @@
 <resources>
     <style name="PhantomTheme" parent="Theme.Material3.Dark.NoActionBar">
         <item name="android:windowBackground">@color/phantom_bg</item>
+        <item name="android:statusBarColor">@color/phantom_bg</item>
+        <item name="android:navigationBarColor">@color/phantom_surface</item>
+        <item name="android:windowLightStatusBar">false</item>
         <item name="colorPrimary">@color/phantom_primary</item>
         <item name="colorOnPrimary">@color/phantom_primary_text</item>
         <item name="colorSurface">@color/phantom_surface</item>

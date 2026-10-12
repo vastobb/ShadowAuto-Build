@@ -17,6 +17,7 @@ public final class PhantomSettings {
     public String apiBase = "http://127.0.0.1:8410/v1";
     public String apiKey = "";
     public String model = "phantom-automation";
+    public String mcpRepoPath = "";
     public boolean verboseLogs;
 
     public static PhantomSettings load(Context context) {
@@ -32,6 +33,7 @@ public final class PhantomSettings {
         settings.apiBase = prefs.getString("apiBase", "http://127.0.0.1:8410/v1");
         settings.apiKey = prefs.getString("apiKey", "");
         settings.model = prefs.getString("model", "phantom-automation");
+        settings.mcpRepoPath = prefs.getString("mcpRepoPath", "");
         settings.verboseLogs = prefs.getBoolean("verboseLogs", false);
         return settings;
     }
@@ -48,6 +50,7 @@ public final class PhantomSettings {
                 .putString("apiBase", apiBase)
                 .putString("apiKey", apiKey)
                 .putString("model", model)
+                .putString("mcpRepoPath", mcpRepoPath)
                 .putBoolean("verboseLogs", verboseLogs)
                 .apply();
     }

@@ -56,6 +56,20 @@ public final class MainActivity extends Activity
         shizukuButton = findViewById(R.id.shizukuButton);
         daemonButton = findViewById(R.id.daemonButton);
         loadingRow = findViewById(R.id.loadingRow);
+        findViewById(R.id.restartButton).setOnClickListener(v -> {
+            if (shizukuState == ShizukuManager.State.READY) {
+                daemon.restart();
+            } else {
+                snack("Authorize Shizuku first, then restart the daemon.");
+            }
+        });
+        findViewById(R.id.recoverButton).setOnClickListener(v -> {
+            if (shizukuState == ShizukuManager.State.READY) {
+                recover();
+            } else {
+                snack("Recovery runs through Shizuku — authorize it first.");
+            }
+        });
         findViewById(R.id.mcpCard).setOnClickListener(v ->
                 startActivity(new Intent(this, McpSetupActivity.class)));
         shizukuButton.setOnClickListener(v -> onShizukuAction());
@@ -152,6 +166,26 @@ public final class MainActivity extends Activity
                         + (def.isEmpty() ? "." : " · default " + def + ".")));
             } catch (Exception ignored) {
                 runOnUiThread(() -> sessionLine.setText("Daemon offline — session info unavailable."));
+            }
+        });
+    }
+
+    private void recover() {
+        setLoading(true);
+        snack("Recovering: identifying the port holder…");
+        daemon.recover(new com.phantom.automation.shizuku.RecoveryController.Listener() {
+            @Override
+            public void onStep(String message) {
+                runOnUiThread(() -> daemonLine.setText(message));
+            }
+
+            @Override
+            public void onDone(boolean ok, String message) {
+                runOnUiThread(() -> {
+                    setLoading(false);
+                    snack(message);
+                    refreshSessions();
+                });
             }
         });
     }

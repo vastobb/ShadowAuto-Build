@@ -29,6 +29,7 @@ public final class PhantomUserService extends Binder {
     static final int TX_START_DAEMON = 2;
     static final int TX_STOP_DAEMON = 3;
     static final int TX_GET_ERROR = 4;
+    static final int TX_EXEC = 5;
     /** Fixed Shizuku destroy transaction: cleanup, then exit this process. */
     static final int DESTROY_CODE = 16777115;
 
@@ -87,6 +88,16 @@ public final class PhantomUserService extends Binder {
                 reply.writeNoException();
                 reply.writeString(PrivilegedDaemon.error());
                 return true;
+            case TX_EXEC: {
+                String command = data.readString();
+                int timeoutMs = data.readInt();
+                int[] exit = new int[1];
+                String output = PrivilegedDaemon.exec(command, timeoutMs, exit);
+                reply.writeNoException();
+                reply.writeInt(exit[0]);
+                reply.writeString(output);
+                return true;
+            }
             default:
                 return super.onTransact(code, data, reply, flags);
         }
@@ -153,6 +164,35 @@ public final class PhantomUserService extends Binder {
             } finally {
                 data.recycle();
                 reply.recycle();
+            }
+        }
+
+        /** Runs a shell command as the UserService identity. */
+        public ExecResult exec(String command, int timeoutMs) throws RemoteException {
+            Parcel data = Parcel.obtain();
+            Parcel reply = Parcel.obtain();
+            try {
+                data.writeInterfaceToken(DESCRIPTOR);
+                data.writeString(command == null ? "" : command);
+                data.writeInt(timeoutMs);
+                binder.transact(TX_EXEC, data, reply, 0);
+                reply.readException();
+                int exit = reply.readInt();
+                String output = reply.readString();
+                return new ExecResult(exit, output == null ? "" : output);
+            } finally {
+                data.recycle();
+                reply.recycle();
+            }
+        }
+
+        public static final class ExecResult {
+            public final int exit;
+            public final String output;
+
+            ExecResult(int exit, String output) {
+                this.exit = exit;
+                this.output = output;
             }
         }
     }

@@ -11,6 +11,8 @@
 
     <application
         android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:theme="@style/PhantomTheme"
         android:usesCleartextTraffic="true">
         <provider
@@ -32,31 +34,38 @@
 
         <activity
             android:name=".ui.SessionsActivity"
+            android:label="Sessions"
             android:exported="false" />
 
         <activity
             android:name=".ui.SessionDetailActivity"
+            android:label="Session"
             android:exported="false"
             android:configChanges="orientation|screenSize|keyboardHidden" />
 
         <activity
             android:name=".ui.InspectorActivity"
+            android:label="Inspector"
             android:exported="false" />
 
         <activity
             android:name=".ui.LauncherActivity"
+            android:label="Apps"
             android:exported="false" />
 
         <activity
             android:name=".ui.McpSetupActivity"
+            android:label="MCP Setup"
             android:exported="false" />
 
         <activity
             android:name=".ui.SettingsActivity"
+            android:label="Settings"
             android:exported="false" />
 
         <activity
             android:name=".ui.LogsActivity"
+            android:label="Logs"
             android:exported="false" />
 
         <service
