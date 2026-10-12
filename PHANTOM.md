@@ -85,6 +85,25 @@ adb reverse tcp:8410 tcp:8410              # device -> container
 
 ## Troubleshooting
 
+If Start sticks or fails, this build is instrumented — do this, in order:
+
+1. Home → Start, wait for the result (every step times out: bind 20s,
+   start 30s, recover 90s — it cannot stick forever).
+2. Logs → Copy diagnostics (Shizuku version/uid, app version, every
+   lifecycle transition with timestamps).
+3. On a PC: `adb logcat -v time | grep -E "PhantomBind|PhantomDaemon"`
+   while tapping Start. `PhantomBind` shows the app-side binding path;
+   `PhantomDaemon` lines prove the UserService process started remotely.
+   - `bindUserService returned without exception` but no
+     `onServiceConnected` → Shizuku accepted but never started/called
+     back (server-side or process-crash — send the full excerpt).
+   - `PhantomUserService(Context) constructor` line present → remote
+     startup works; the fault is later (daemon/RPC).
+   - No `PhantomDaemon` lines at all → the remote process never ran.
+4. Recover (Home) handles a stale legacy shell automatically — no manual
+   `adb shell kill` needed. It only stops positively identified legacy
+   processes and verifies the Phantom handshake before reporting success.
+
 | Symptom | Fix |
 |---|---|
 | Shizuku not running | Start it in the Shizuku app → Reconnect |
