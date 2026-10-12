@@ -14,3 +14,4 @@ paddler-ocr/OpenCV/
 paddler-ocr/PaddleOcrAssets/
 paddler-ocr/cache/
 paddler-ocr/.cxx/
+mcp/__pycache__/

@@ -56,8 +56,8 @@
 - CI `Build APK`: `phantom-app:assembleDebug` + legacy APKs green;
   `:phantom-app:testDebugUnitTest` green (tar/provisioning JVM tests).
 - Python: 11/11 unittest green (RPC framing incl. new methods, SSE,
-  model list). MCP stdio handshake re-verified after rename (do on next
-  run — see limitations).
+  model list). MCP stdio handshake re-verified after rename: 27/27 tools
+  listed, structured unreachable-shell error without device.
 - APK dex check: Phantom + Shizuku classes present in `phantom-app-debug`.
 
 ## Genuine remaining limitations
