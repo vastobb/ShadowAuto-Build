@@ -85,6 +85,19 @@ class BackendProtocolTest(unittest.TestCase):
             self.rpc().call("nope", {})
         self.assertIn("McpSessions", str(ctx.exception))
 
+    def test_phantom_method_passthrough(self):
+        reply = self.rpc().open_session("s1", 720, 1280, "hevc")
+        self.assertEqual(reply.result["method"], "openSession")
+        self.assertEqual(reply.result["params"]["codec"], "hevc")
+        caps = self.rpc().codec_caps()
+        self.assertEqual(caps.result["method"], "codecCaps")
+        found = self.rpc().find_text("s1", "Search")
+        self.assertEqual(found.result["params"]["query"], "Search")
+        configured = self.rpc().ocr_configure("/m", "/l.txt", "/lib")
+        self.assertEqual(configured.result["params"]["libDir"], "/lib")
+        rec = self.rpc().set_recording_state("s1", "recording")
+        self.assertEqual(rec.result["params"]["state"], "recording")
+
     def test_unreachable_error_mentions_adb_forward(self):
         dead = ShellRpc(host="127.0.0.1", port=1, timeout=1)
         with self.assertRaises(ShadowAutoError) as ctx:

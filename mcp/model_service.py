@@ -15,7 +15,7 @@ Implements the two endpoints the existing Android code actually calls:
 Configure the controller app with::
 
     API URL: http://127.0.0.1:8410/v1
-    Model:   shadowauto-mcp
+    Model:   phantom-automation (SHADOWAUTO_MODEL_ID override keeps shadowauto-mcp working)
 
 Behavior:
 
@@ -40,7 +40,7 @@ Environment:
 
     SHADOWAUTO_MODEL_HOST  bind address, default 127.0.0.1 (keep loopback)
     SHADOWAUTO_MODEL_PORT  port, default 8410
-    SHADOWAUTO_MODEL_ID    placeholder model id, default shadowauto-mcp
+    SHADOWAUTO_MODEL_ID    placeholder model id, default phantom-automation
     SHADOWAUTO_API_KEY     optional required Bearer key, default ""
     SHADOWAUTO_HOST / SHADOWAUTO_PORT / SHADOWAUTO_RPC_TIMEOUT
         backend shell RPC settings (see shadowauto_backend.py)
@@ -57,7 +57,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from shadowauto_backend import ShellRpc
 
-MODEL_ID = os.environ.get("SHADOWAUTO_MODEL_ID", "shadowauto-mcp")
+MODEL_ID = os.environ.get("SHADOWAUTO_MODEL_ID", "phantom-automation")
 REQUIRED_KEY = os.environ.get("SHADOWAUTO_API_KEY", "")
 
 
@@ -77,14 +77,14 @@ def backend_summary(timeout: float = 3.0) -> str:
 
 
 LOCAL_MODE_NOTE = (
-    "Local model shadowauto-mcp: no LLM inference here. "
+    "Local model: no LLM inference here. "
     "For step-by-step control use the MCP server (open_session/dump_ui/tap/...); "
     "for autonomous tasks configure an external OpenAI-compatible endpoint."
 )
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "ShadowAutoModel/1.0"
+    server_version = "PhantomModel/1.0"
 
     # -- helpers ------------------------------------------------------
     def _send_json(self, code: int, payload: dict) -> None:
@@ -228,7 +228,7 @@ def build_server(host: str, port: int) -> ThreadingHTTPServer:
 
 def main() -> None:
     global MODEL_ID
-    parser = argparse.ArgumentParser(description="ShadowAuto local model service")
+    parser = argparse.ArgumentParser(description="Phantom local model service")
     parser.add_argument("--host", default=os.environ.get("SHADOWAUTO_MODEL_HOST", "127.0.0.1"))
     parser.add_argument("--port", type=int,
                         default=int(os.environ.get("SHADOWAUTO_MODEL_PORT", "8410")))
@@ -238,7 +238,7 @@ def main() -> None:
     if args.host not in ("127.0.0.1", "localhost", "::1"):
         print(f"WARNING: binding non-loopback {args.host}; default is 127.0.0.1")
     server = build_server(args.host, args.port)
-    print(f"ShadowAuto local model service on http://{args.host}:{args.port}/v1 "
+    print(f"Phantom local model service on http://{args.host}:{args.port}/v1 "
           f"model={MODEL_ID}")
     print("Controller API URL: "
           f"http://{args.host}:{args.port}/v1  (device needs: adb reverse "

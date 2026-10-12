@@ -35,6 +35,9 @@ jobs:
       - name: Build debug APKs (fast, no OCR native deps)
         run: ./gradlew :android-shell:assembleDebug :controller-app:assembleDebug :phantom-app:assembleDebug -PenablePaddleLiteOcr=false --stacktrace
 
+      - name: Phantom unit tests (JVM, no device)
+        run: ./gradlew :phantom-app:testDebugUnitTest -PenablePaddleLiteOcr=false --stacktrace
+
       - name: List APK outputs
         if: always()
         run: |

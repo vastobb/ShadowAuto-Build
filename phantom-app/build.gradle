@@ -40,4 +40,5 @@ dependencies {
     // PaddleOCR Java API (native libs + models are provisioned on demand;
     // compile only needs the Java stubs, same as the legacy shell module).
     implementation project(":paddler-ocr")
+    testImplementation "junit:junit:4.13.2"
 }

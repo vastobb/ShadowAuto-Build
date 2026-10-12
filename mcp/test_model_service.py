@@ -50,6 +50,7 @@ class ModelServiceTest(unittest.TestCase):
         self.assertEqual(code, 200)
         ids = [m["id"] for m in json.loads(body)["data"]]
         self.assertIn(model_service.MODEL_ID, ids)
+        self.assertEqual(model_service.MODEL_ID, "phantom-automation")
 
     def test_controller_test_pattern_say_ok(self):
         code, body, _ = _request(self.server, "POST", "/v1/chat/completions", {

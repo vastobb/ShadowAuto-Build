@@ -159,13 +159,21 @@ class ShellRpc:
 
     # -- MCP session RPC (needs the APK built from this repo) -----------
     def open_session(self, session_id: str = "", width: int = 0,
-                     height: int = 0) -> RpcResult:
+                     height: int = 0, codec: str = "auto") -> RpcResult:
         return self.call("openSession", {"sessionId": session_id,
-                                         "width": width, "height": height},
+                                         "width": width, "height": height,
+                                         "codec": codec or "auto"},
                          timeout=max(self.timeout, 30))
 
     def close_session(self, session_id: str = "") -> RpcResult:
         return self.call("closeSession", {"sessionId": session_id})
+
+    def codec_caps(self) -> RpcResult:
+        return self.call("codecCaps", {})
+
+    def set_recording_state(self, session_id: str, state: str) -> RpcResult:
+        return self.call("setRecordingState", {"sessionId": session_id,
+                                               "state": state})
 
     def list_apps(self) -> RpcResult:
         return self.call("listApps", {}, timeout=max(self.timeout, 30))
@@ -220,3 +228,21 @@ class ShellRpc:
 
     def clear_text(self, session_id: str) -> RpcResult:
         return self.call("clearText", {"sessionId": session_id})
+
+    # -- OCR RPC (Phantom engine; -32601 on legacy shells) ------------------
+    def ocr_status(self) -> RpcResult:
+        return self.call("ocrStatus", {})
+
+    def ocr_configure(self, model_dir: str, label_path: str,
+                      lib_dir: str) -> RpcResult:
+        return self.call("ocrConfigure", {"modelDir": model_dir,
+                                          "labelPath": label_path,
+                                          "libDir": lib_dir})
+
+    def ocr_recognize(self, session_id: str) -> RpcResult:
+        return self.call("ocrRecognize", {"sessionId": session_id},
+                         timeout=max(self.timeout, 45))
+
+    def find_text(self, session_id: str, query: str) -> RpcResult:
+        return self.call("findText", {"sessionId": session_id, "query": query},
+                         timeout=max(self.timeout, 45))

@@ -31,7 +31,7 @@ from mcp.server.mcpserver import MCPServer
 
 from shadowauto_backend import DEFAULT_PORT, ShadowAutoError, ShellRpc
 
-SERVER_NAME = "shadowauto"
+SERVER_NAME = "phantom"
 
 _rpc: ShellRpc | None = None
 
@@ -80,9 +80,10 @@ def logs() -> str:
     return _call(rpc().logs)
 
 
-@mcp.tool(description="Open a direct-control virtual-display session (no AI loop). Returns sessionId/displayId/size.")
-def open_session(session_id: str = "", width: int = 0, height: int = 0) -> str:
-    return _call(rpc().open_session, session_id, width, height)
+@mcp.tool(description="Open a direct-control virtual-display session (no AI loop). Codec auto/avc/hevc. Returns sessionId/displayId/size.")
+def open_session(session_id: str = "", width: int = 0, height: int = 0,
+                 codec: str = "auto") -> str:
+    return _call(rpc().open_session, session_id, width, height, codec)
 
 
 @mcp.tool(description="Close one MCP session, or all when session_id is empty.")
@@ -165,6 +166,36 @@ def clear_text(session_id: str) -> str:
 def start_task(goal: str, api_key: str = "", api_base: str = "",
                model: str = "", task_id: str = "") -> str:
     return _call(rpc().start_task, goal, api_key, api_base, model, task_id)
+
+
+@mcp.tool(description="Encoder capabilities of the device (avc/hevc availability and encoder names).")
+def codec_caps() -> str:
+    return _call(rpc().codec_caps)
+
+
+@mcp.tool(description="Mirror the app-side recorder state into the session status (idle/recording/paused).")
+def set_recording_state(session_id: str, state: str) -> str:
+    return _call(rpc().set_recording_state, session_id, state)
+
+
+@mcp.tool(description="OCR engine status: READY or exactly what is missing (models/labels/native libs).")
+def ocr_status() -> str:
+    return _call(rpc().ocr_status)
+
+
+@mcp.tool(description="Point the OCR engine at model/label/lib directories (app-private filesDir/ocr/...).")
+def ocr_configure(model_dir: str, label_path: str, lib_dir: str) -> str:
+    return _call(rpc().ocr_configure, model_dir, label_path, lib_dir)
+
+
+@mcp.tool(description="OCR the session virtual display: text, confidence, display-local bounds. Falls back only to an explicit error.")
+def ocr_recognize(session_id: str) -> str:
+    return _call(rpc().ocr_recognize, session_id)
+
+
+@mcp.tool(description="Find visible text: fresh accessibility dump first, OCR fallback second. Returns bounds for tap; error when absent (never guesses).")
+def find_text(session_id: str, query: str) -> str:
+    return _call(rpc().find_text, session_id, query)
 
 
 @mcp.tool(description="Cancel one autonomous task, or all when task_id is empty.")
