@@ -24,8 +24,10 @@
         android:layout_marginTop="8dp"
         android:layout_weight="1"
         app:cardBackgroundColor="#000000"
-        app:cardCornerRadius="16dp"
-        app:cardElevation="2dp">
+        app:cardCornerRadius="8dp"
+        app:cardElevation="0dp"
+                app:strokeColor="#232B3D"
+                app:strokeWidth="1dp">
 
         <TextureView
             android:id="@+id/detailTexture"

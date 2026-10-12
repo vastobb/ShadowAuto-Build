@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Phantom design tokens: flat rows, hairlines, compact type. -->
+    <style name="PhantomSectionLabel">
+        <item name="android:textColor">@color/phantom_primary</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.08</item>
+    </style>
+
+    <style name="PhantomRowTitle">
+        <item name="android:textColor">@color/phantom_text</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="PhantomRowSubtitle">
+        <item name="android:textColor">@color/phantom_text_dim</item>
+        <item name="android:textSize">13sp</item>
+    </style>
+
+    <style name="PhantomHeaderTitle">
+        <item name="android:textColor">@color/phantom_text</item>
+        <item name="android:textSize">20sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="PhantomMono">
+        <item name="android:textColor">@color/phantom_text_dim</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:typeface">monospace</item>
+    </style>
+</resources>

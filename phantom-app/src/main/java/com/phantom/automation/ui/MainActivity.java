@@ -38,6 +38,7 @@ public final class MainActivity extends Activity
     private TextView daemonDot;
     private TextView daemonLine;
     private TextView sessionLine;
+    private TextView mcpLine;
     private MaterialButton primaryButton;
     private MaterialButton shizukuButton;
     private MaterialButton daemonButton;
@@ -52,6 +53,7 @@ public final class MainActivity extends Activity
         daemonDot = findViewById(R.id.daemonDot);
         daemonLine = findViewById(R.id.daemonLine);
         sessionLine = findViewById(R.id.sessionLine);
+        mcpLine = findViewById(R.id.mcpLine);
         primaryButton = findViewById(R.id.primaryButton);
         shizukuButton = findViewById(R.id.shizukuButton);
         daemonButton = findViewById(R.id.daemonButton);
@@ -246,6 +248,9 @@ public final class MainActivity extends Activity
     private void renderDaemon(String detail) {
         dot(daemonDot, daemonState == DaemonController.State.RUNNING);
         daemonLine.setText(detail);
+        mcpLine.setText(daemonState == DaemonController.State.RUNNING
+                ? "Daemon verified — OpenCode can connect."
+                : "Start the daemon to enable MCP.");
         renderDaemonButton();
     }
 

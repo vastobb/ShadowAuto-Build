@@ -136,8 +136,10 @@ public final class LauncherActivity extends Activity {
         params.topMargin = 8;
         card.setLayoutParams(params);
         card.setCardBackgroundColor(0xFF141926);
-        card.setRadius(16);
-        card.setCardElevation(2);
+        card.setRadius(8);
+        card.setCardElevation(0);
+        card.setStrokeColor(0xFF232B3D);
+        card.setStrokeWidth(2);
         card.setClickable(true);
         card.setFocusable(true);
         card.setOnClickListener(v -> launch(app));
