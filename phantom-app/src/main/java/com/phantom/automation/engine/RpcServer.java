@@ -207,6 +207,25 @@ final class RpcServer {
             if ("clearText".equals(method)) {
                 return JsonRpc.result(id, engine.mcp().clearText(JsonRpc.text(params, "sessionId")));
             }
+            if ("ocrStatus".equals(method)) {
+                return JsonRpc.result(id, engine.mcp().ocrStatus());
+            }
+            if ("ocrConfigure".equals(method)) {
+                return JsonRpc.result(id, engine.mcp().ocrConfigure(
+                        JsonRpc.text(params, "modelDir"),
+                        JsonRpc.text(params, "labelPath"),
+                        JsonRpc.text(params, "libDir")
+                ));
+            }
+            if ("ocrRecognize".equals(method)) {
+                return JsonRpc.result(id, engine.mcp().ocrRecognize(JsonRpc.text(params, "sessionId")));
+            }
+            if ("findText".equals(method)) {
+                return JsonRpc.result(id, engine.mcp().findText(
+                        JsonRpc.text(params, "sessionId"),
+                        JsonRpc.text(params, "query")
+                ));
+            }
             if ("stopTask".equals(method)) {
                 String taskId = JsonRpc.text(params, "taskId");
                 if (taskId.isEmpty()) {

@@ -34,6 +34,7 @@ final class McpSessions {
     private UiBridge ui;
     private InputBridge input;
     private ClipboardBridge clipboard;
+    private com.phantom.automation.ocr.OcrManager ocr;
 
     McpSessions(LogHub logs) {
         this.logs = logs;
@@ -382,6 +383,237 @@ final class McpSessions {
         getInput().delete(session.display.displayId);
         logs.task(session.id, "mcp clear text sent by key events");
         return boolResult(session, "cleared", true);
+    }
+
+    synchronized JsonObject ocrStatus() {
+        return ocrStatusJson(getOcr());
+    }
+
+    synchronized JsonObject ocrConfigure(String modelDir, String labelPath, String libDir) {
+        com.phantom.automation.ocr.OcrManager ocr = getOcr();
+        ocr.configure(modelDir, labelPath, libDir);
+        return ocrStatusJson(ocr);
+    }
+
+    synchronized JsonObject ocrRecognize(String sessionId) throws Exception {
+        Session session = require(sessionId);
+        android.graphics.Bitmap bitmap = session.display.captureBitmap(8, 120);
+        if (bitmap == null) {
+            throw new IllegalStateException("screenshot capture returned no frame; retry capture");
+        }
+        try {
+            java.util.List<com.silentauto.paddlerocr.PaddleOcrResult> results =
+                    getOcr().recognize(bitmap);
+            com.google.gson.JsonArray array = new com.google.gson.JsonArray();
+            for (com.silentauto.paddlerocr.PaddleOcrResult result : results) {
+                array.add(ocrResultJson(result));
+            }
+            JsonObject out = new JsonObject();
+            out.addProperty("sessionId", session.id);
+            out.addProperty("displayId", session.display.displayId);
+            out.addProperty("width", bitmap.getWidth());
+            out.addProperty("height", bitmap.getHeight());
+            out.addProperty("source", "ocr");
+            out.add("results", array);
+            logs.task(session.id, "ocr recognized " + array.size() + " regions");
+            return out;
+        } finally {
+            bitmap.recycle();
+        }
+    }
+
+    /**
+     * Fresh accessibility dump first, OCR fallback second. Never taps and
+     * never fabricates coordinates: missing text is an explicit error.
+     */
+    synchronized JsonObject findText(String sessionId, String query) throws Exception {
+        Session session = require(sessionId);
+        if (Config.empty(query)) {
+            throw new IllegalArgumentException("query is required");
+        }
+        String needle = query.trim().toLowerCase(java.util.Locale.US);
+        JsonObject dump = dumpUi(session.id, 0, 0, 0, "simple");
+        int nodes = 0;
+        JsonObject hit = findInDump(dump, needle, session);
+        if (hit != null) {
+            hit.addProperty("sessionId", session.id);
+            hit.addProperty("displayId", session.display.displayId);
+            logs.task(session.id, "findText '" + query.trim() + "' via accessibility");
+            return hit;
+        }
+        nodes = countDumpNodes(dump);
+        JsonObject ocr = ocrRecognize(session.id);
+        com.google.gson.JsonArray results = ocr.getAsJsonArray("results");
+        int ocrCount = results == null ? 0 : results.size();
+        for (int i = 0; i < ocrCount; i++) {
+            JsonObject item = results.get(i).getAsJsonObject();
+            String text = item.has("text") ? item.get("text").getAsString() : "";
+            if (text.toLowerCase(java.util.Locale.US).contains(needle)) {
+                JsonObject out = new JsonObject();
+                out.addProperty("sessionId", session.id);
+                out.addProperty("displayId", session.display.displayId);
+                out.addProperty("source", "ocr");
+                out.addProperty("text", text);
+                out.add("bounds", item.get("bounds"));
+                out.add("center", item.get("center"));
+                logs.task(session.id, "findText '" + query.trim() + "' via ocr");
+                return out;
+            }
+        }
+        throw new IllegalStateException("text not found: '" + query.trim()
+                + "' (" + nodes + " accessibility nodes, " + ocrCount
+                + " ocr regions searched; capture a fresh screenshot to verify)");
+    }
+
+    private JsonObject ocrStatusJson(com.phantom.automation.ocr.OcrManager ocr) {
+        com.phantom.automation.ocr.OcrManager.Status status = ocr.status();
+        JsonObject out = new JsonObject();
+        out.addProperty("state", status.state.name());
+        out.addProperty("detail", status.detail);
+        out.addProperty("modelDir", status.modelDir);
+        out.addProperty("labelPath", status.labelPath);
+        out.addProperty("libDir", status.libDir);
+        return out;
+    }
+
+    private JsonObject ocrResultJson(com.silentauto.paddlerocr.PaddleOcrResult result) {
+        android.graphics.Rect bounds = result.getBounds();
+        JsonObject item = new JsonObject();
+        item.addProperty("text", result.getText());
+        item.addProperty("confidence", result.getConfidence());
+        JsonObject box = new JsonObject();
+        box.addProperty("left", bounds.left);
+        box.addProperty("top", bounds.top);
+        box.addProperty("right", bounds.right);
+        box.addProperty("bottom", bounds.bottom);
+        box.addProperty("centerX", (bounds.left + bounds.right) / 2);
+        box.addProperty("centerY", (bounds.top + bounds.bottom) / 2);
+        item.add("bounds", box);
+        JsonObject center = new JsonObject();
+        center.addProperty("x", (bounds.left + bounds.right) / 2);
+        center.addProperty("y", (bounds.top + bounds.bottom) / 2);
+        item.add("center", center);
+        item.addProperty("source", "ocr");
+        return item;
+    }
+
+    private JsonObject findInDump(JsonObject dump, String needle, Session session) {
+        JsonObject hit = findInNodes(dump.has("targets") ? dump.getAsJsonArray("targets") : null,
+                needle, "targetIndex", session);
+        if (hit != null) {
+            return hit;
+        }
+        return findInNodes(dump.has("inputs") ? dump.getAsJsonArray("inputs") : null,
+                needle, "inputIndex", session);
+    }
+
+    private JsonObject findInNodes(com.google.gson.JsonArray nodes, String needle,
+                                   String indexKey, Session session) {
+        if (nodes == null) {
+            return null;
+        }
+        for (int i = 0; i < nodes.size(); i++) {
+            JsonObject node;
+            try {
+                node = nodes.get(i).getAsJsonObject();
+            } catch (Throwable ignored) {
+                continue;
+            }
+            String label = node.has("label") ? stringOrEmpty(node, "label") : "";
+            String text = node.has("text") ? stringOrEmpty(node, "text") : "";
+            if (!label.toLowerCase(java.util.Locale.US).contains(needle)
+                    && !text.toLowerCase(java.util.Locale.US).contains(needle)) {
+                continue;
+            }
+            int[] bounds = parseBounds(node.has("bounds") ? stringOrEmpty(node, "bounds") : "");
+            if (bounds == null) {
+                continue;
+            }
+            int[] center = parseCenter(node.has("center") ? stringOrEmpty(node, "center") : "",
+                    bounds);
+            if (!validBounds(bounds, session.display.width, session.display.height)) {
+                continue;
+            }
+            JsonObject out = new JsonObject();
+            out.addProperty("source", "accessibility");
+            try {
+                out.addProperty(indexKey, node.get(indexKey).getAsInt());
+            } catch (Throwable ignored) {
+            }
+            out.addProperty("label", label.isEmpty() ? text : label);
+            JsonObject box = new JsonObject();
+            box.addProperty("left", bounds[0]);
+            box.addProperty("top", bounds[1]);
+            box.addProperty("right", bounds[2]);
+            box.addProperty("bottom", bounds[3]);
+            box.addProperty("centerX", center[0]);
+            box.addProperty("centerY", center[1]);
+            out.add("bounds", box);
+            JsonObject point = new JsonObject();
+            point.addProperty("x", center[0]);
+            point.addProperty("y", center[1]);
+            out.add("center", point);
+            return out;
+        }
+        return null;
+    }
+
+    private int countDumpNodes(JsonObject dump) {
+        int count = 0;
+        for (String key : new String[]{"targets", "inputs"}) {
+            try {
+                if (dump.has(key)) {
+                    count += dump.getAsJsonArray(key).size();
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+        return count;
+    }
+
+    private static String stringOrEmpty(JsonObject node, String key) {
+        try {
+            return node.get(key).isJsonNull() ? "" : node.get(key).getAsString();
+        } catch (Throwable ignored) {
+            return "";
+        }
+    }
+
+    private static int[] parseBounds(String value) {
+        try {
+            String[] parts = value.split(",");
+            if (parts.length != 4) {
+                return null;
+            }
+            return new int[]{Integer.parseInt(parts[0].trim()), Integer.parseInt(parts[1].trim()),
+                    Integer.parseInt(parts[2].trim()), Integer.parseInt(parts[3].trim())};
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private static int[] parseCenter(String value, int[] bounds) {
+        try {
+            String[] parts = value.split(",");
+            if (parts.length != 2) {
+                throw new IllegalArgumentException();
+            }
+            return new int[]{Integer.parseInt(parts[0].trim()), Integer.parseInt(parts[1].trim())};
+        } catch (Throwable ignored) {
+            return new int[]{(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2};
+        }
+    }
+
+    private static boolean validBounds(int[] bounds, int width, int height) {
+        return bounds[0] >= 0 && bounds[1] >= 0 && bounds[2] > bounds[0]
+                && bounds[3] > bounds[1] && bounds[0] < width && bounds[1] < height;
+    }
+
+    private com.phantom.automation.ocr.OcrManager getOcr() {
+        if (ocr == null) {
+            ocr = new com.phantom.automation.ocr.OcrManager();
+        }
+        return ocr;
     }
 
     private Session require(String sessionId) {
