@@ -3,17 +3,19 @@ package com.phantom.automation.ui;
 import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
 import android.view.View;
-import android.widget.Button;
-import android.widget.EditText;
+import android.widget.ArrayAdapter;
 import android.widget.LinearLayout;
+import android.widget.Spinner;
 import android.widget.TextView;
-import android.widget.Toast;
 
+import com.google.android.material.button.MaterialButton;
+import com.google.android.material.card.MaterialCardView;
+import com.google.android.material.snackbar.Snackbar;
+import com.google.android.material.textfield.TextInputEditText;
 import com.phantom.automation.R;
-import com.phantom.automation.rpc.RpcClient;
+import com.phantom.automation.configuration.PhantomSettings;
+import com.phantom.automation.rpc.Rpc;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -21,28 +23,37 @@ import org.json.JSONObject;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** Lists virtual-display sessions; create/close/open. */
-public final class SessionsActivity extends Activity implements RpcClient.Listener {
-    private final Handler main = new Handler(Looper.getMainLooper());
+/** Session list, creation (resolution/density/codec), open, close. */
+public final class SessionsActivity extends Activity {
     private final ExecutorService io = Executors.newCachedThreadPool();
-    private RpcClient rpc;
     private LinearLayout list;
-    private TextView empty;
-    private EditText widthInput;
-    private EditText heightInput;
+    private TextView stateLine;
+    private TextInputEditText widthInput;
+    private TextInputEditText heightInput;
+    private Spinner codecSpinner;
+    private View loading;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_sessions);
         list = findViewById(R.id.sessionList);
-        empty = findViewById(R.id.sessionEmpty);
+        stateLine = findViewById(R.id.stateLine);
         widthInput = findViewById(R.id.widthInput);
         heightInput = findViewById(R.id.heightInput);
-        Button create = findViewById(R.id.createButton);
-        Button refresh = findViewById(R.id.refreshButton);
-        create.setOnClickListener(v -> createSession());
-        refresh.setOnClickListener(v -> refresh());
+        codecSpinner = findViewById(R.id.codecSpinner);
+        loading = findViewById(R.id.loading);
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this,
+                android.R.layout.simple_spinner_item, new String[]{"auto", "avc", "hevc"});
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        codecSpinner.setAdapter(adapter);
+        PhantomSettings settings = PhantomSettings.load(this);
+        widthInput.setText(String.valueOf(settings.displayWidth));
+        heightInput.setText(String.valueOf(settings.displayHeight));
+        codecSpinner.setSelection(indexOf(settings.codec));
+        findViewById(R.id.createButton).setOnClickListener(v -> createSession());
+        findViewById(R.id.refreshButton).setOnClickListener(v -> refresh());
+        NavHelper.bind(this, R.id.bottomNav, R.id.nav_sessions);
     }
 
     @Override
@@ -57,113 +68,170 @@ public final class SessionsActivity extends Activity implements RpcClient.Listen
         super.onDestroy();
     }
 
+    private int indexOf(String value) {
+        for (int i = 0; i < codecSpinner.getCount(); i++) {
+            if (codecSpinner.getItemAtPosition(i).toString().equals(value)) {
+                return i;
+            }
+        }
+        return 0;
+    }
+
     private void refresh() {
-        io.execute(() -> send("status", "{}"));
+        setLoading(true);
+        stateLine.setText("");
+        io.execute(() -> {
+            try {
+                JSONObject result = Rpc.call("status", new JSONObject(), 8000);
+                JSONArray sessions = result.optJSONArray("mcpSessions");
+                runOnUiThread(() -> {
+                    setLoading(false);
+                    render(sessions == null ? new JSONArray() : sessions);
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    setLoading(false);
+                    list.removeAllViews();
+                    stateLine.setText(e.getMessage());
+                });
+            }
+        });
     }
 
     private void createSession() {
         int width = number(widthInput, 720);
         int height = number(heightInput, 1280);
-        io.execute(() -> send("openSession",
-                "{\"width\":" + width + ",\"height\":" + height + ",\"codec\":\"auto\"}"));
+        String codec = codecSpinner.getSelectedItem().toString();
+        setLoading(true);
+        io.execute(() -> {
+            try {
+                JSONObject params = new JSONObject()
+                        .put("width", width).put("height", height).put("codec", codec);
+                JSONObject result = Rpc.call("openSession", params, 30000);
+                runOnUiThread(() -> {
+                    setLoading(false);
+                    openDetail(result.optString("sessionId"),
+                            result.optInt("width", width), result.optInt("height", height));
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    setLoading(false);
+                    snack(e.getMessage());
+                });
+            }
+        });
     }
 
     private void closeSession(String sessionId) {
-        io.execute(() -> send("closeSession", "{\"sessionId\":\"" + escape(sessionId) + "\"}"));
+        io.execute(() -> {
+            try {
+                Rpc.call("closeSession",
+                        new JSONObject().put("sessionId", sessionId), 10000);
+                runOnUiThread(this::refresh);
+            } catch (Exception e) {
+                runOnUiThread(() -> snack(e.getMessage()));
+            }
+        });
     }
 
-    private void send(String method, String paramsJson) {
-        try {
-            if (rpc == null) {
-                rpc = new RpcClient("127.0.0.1", 43110, this);
-            }
-            rpc.send(method, new JSONObject(paramsJson));
-        } catch (Exception e) {
-            toast("RPC error: " + e.getMessage() + " (is the daemon running?)");
-            rpc = null;
-        }
-    }
-
-    @Override
-    public void onLine(String line) {
-        main.post(() -> handle(line));
-    }
-
-    @Override
-    public void onClosed(Exception error) {
-        rpc = null;
-    }
-
-    private void handle(String line) {
-        try {
-            JSONObject root = new JSONObject(line);
-            if (root.has("error")) {
-                toast("Shell: " + root.getJSONObject("error").optString("message"));
-                return;
-            }
-            if (!root.has("result")) {
-                return;
-            }
-            JSONObject result = root.getJSONObject("result");
-            if (result.has("mcpSessions")) {
-                render(result.getJSONArray("mcpSessions"));
-            } else if (result.has("sessionId")) {
-                refresh();
-            } else if (result.has("value")) {
-                refresh();
-            }
-        } catch (Exception ignored) {
-        }
+    private void openDetail(String sessionId, int width, int height) {
+        Intent intent = new Intent(this, SessionDetailActivity.class);
+        intent.putExtra(SessionDetailActivity.EXTRA_SESSION_ID, sessionId);
+        intent.putExtra(SessionDetailActivity.EXTRA_WIDTH, width);
+        intent.putExtra(SessionDetailActivity.EXTRA_HEIGHT, height);
+        startActivity(intent);
     }
 
     private void render(JSONArray sessions) {
         list.removeAllViews();
-        empty.setVisibility(sessions.length() == 0 ? View.VISIBLE : View.GONE);
+        if (sessions.length() == 0) {
+            stateLine.setText("No sessions yet — create one above.");
+            return;
+        }
+        stateLine.setText(sessions.length() + " active session"
+                + (sessions.length() == 1 ? "" : "s") + " · tap to open, ✕ to close.");
         for (int i = 0; i < sessions.length(); i++) {
             JSONObject item = sessions.optJSONObject(i);
             if (item == null) {
                 continue;
             }
-            String id = item.optString("sessionId");
-            String label = id + " · " + item.optString("state")
-                    + " · display " + item.optInt("displayId")
-                    + " · " + item.optInt("width") + "x" + item.optInt("height")
-                    + " · " + item.optString("codec")
-                    + (item.optString("foregroundApp").isEmpty()
-                            ? "" : "\n" + item.optString("foregroundApp"));
-            TextView view = new TextView(this);
-            view.setText(label);
-            view.setTextColor(0xFFE8EDF2);
-            view.setTextSize(14);
-            view.setPadding(16, 16, 16, 16);
-            view.setOnClickListener(v -> {
-                Intent intent = new Intent(this, SessionDetailActivity.class);
-                intent.putExtra(SessionDetailActivity.EXTRA_SESSION_ID, id);
-                intent.putExtra(SessionDetailActivity.EXTRA_WIDTH, item.optInt("width"));
-                intent.putExtra(SessionDetailActivity.EXTRA_HEIGHT, item.optInt("height"));
-                startActivity(intent);
-            });
-            view.setOnLongClickListener(v -> {
-                closeSession(id);
-                return true;
-            });
-            list.addView(view);
+            list.addView(card(item));
         }
     }
 
-    private int number(EditText input, int fallback) {
+    private MaterialCardView card(JSONObject item) {
+        String id = item.optString("sessionId");
+        MaterialCardView card = new MaterialCardView(this);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        params.topMargin = 8;
+        card.setLayoutParams(params);
+        card.setCardBackgroundColor(0xFF141926);
+        card.setRadius(16);
+        card.setCardElevation(2);
+        card.setClickable(true);
+        card.setFocusable(true);
+        card.setOnClickListener(v -> openDetail(id, item.optInt("width"), item.optInt("height")));
+
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        row.setPadding(16, 16, 16, 16);
+
+        LinearLayout text = new LinearLayout(this);
+        text.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams textParams = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1);
+        text.setLayoutParams(textParams);
+
+        TextView title = new TextView(this);
+        title.setText(id + " · " + item.optString("state"));
+        title.setTextColor(0xFFE8EDF2);
+        title.setTextSize(15);
+        title.setTypeface(title.getTypeface(), android.graphics.Typeface.BOLD);
+        text.addView(title);
+
+        String sub = "display " + item.optInt("displayId")
+                + " · " + item.optInt("width") + "x" + item.optInt("height")
+                + " · " + item.optString("codec")
+                + ("recording".equals(item.optString("recordingState")) ? " · ●REC" : "")
+                + (item.optString("foregroundApp").isEmpty()
+                        ? "" : "\n" + item.optString("foregroundApp"));
+        String err = item.optString("lastError");
+        if (!err.isEmpty() && !"ERROR".equals(item.optString("state"))) {
+            err = "";
+        }
+        TextView subtitle = new TextView(this);
+        subtitle.setText(sub + (err.isEmpty() ? "" : "\n" + err));
+        subtitle.setTextColor(0xFF9AA7B4);
+        subtitle.setTextSize(13);
+        text.addView(subtitle);
+        row.addView(text);
+
+        MaterialButton close = new MaterialButton(this, null,
+                com.google.android.material.R.attr.materialIconButtonStyle);
+        close.setText("✕");
+        close.setOnClickListener(v -> closeSession(id));
+        row.addView(close);
+        card.addView(row);
+        return card;
+    }
+
+    private int number(TextInputEditText input, int fallback) {
         try {
-            return Integer.parseInt(input.getText().toString().trim());
+            String text = input.getText() == null ? "" : input.getText().toString().trim();
+            return text.isEmpty() ? fallback : Integer.parseInt(text);
         } catch (NumberFormatException e) {
             return fallback;
         }
     }
 
-    private void toast(String message) {
-        main.post(() -> Toast.makeText(this, message, Toast.LENGTH_LONG).show());
+    private void setLoading(boolean loading) {
+        this.loading.setVisibility(loading ? View.VISIBLE : View.GONE);
     }
 
-    private static String escape(String value) {
-        return value.replace("\\", "\\\\").replace("\"", "\\\"");
+    private void snack(String message) {
+        Snackbar.make(findViewById(R.id.root), message == null ? "Error" : message,
+                Snackbar.LENGTH_LONG).show();
     }
 }

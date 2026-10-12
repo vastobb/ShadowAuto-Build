@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Phantom dark theme: near-black, restrained indigo/violet. -->
+    <color name="phantom_bg">#0B0D12</color>
+    <color name="phantom_surface">#141926</color>
+    <color name="phantom_surface_hi">#1C2333</color>
+    <color name="phantom_primary">#8B7CFF</color>
+    <color name="phantom_primary_text">#0B0D12</color>
+    <color name="phantom_text">#E8EDF2</color>
+    <color name="phantom_text_dim">#9AA7B4</color>
+    <color name="phantom_ok">#4ADE80</color>
+    <color name="phantom_warn">#FBBF24</color>
+    <color name="phantom_error">#F87171</color>
+</resources>

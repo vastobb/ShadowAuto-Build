@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#0F1419"
+    android:background="@color/phantom_bg"
     android:orientation="vertical"
     android:padding="12dp">
 
@@ -11,17 +12,24 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="Session"
-        android:textColor="#E8EDF2"
-        android:textSize="14sp"
+        android:textColor="@color/phantom_text"
+        android:textSize="16sp"
         android:textStyle="bold" />
 
-    <TextureView
-        android:id="@+id/detailTexture"
+    <com.google.android.material.card.MaterialCardView
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_marginTop="8dp"
         android:layout_weight="1"
-        android:background="#000000" />
+        app:cardBackgroundColor="#000000"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="2dp">
+
+        <TextureView
+            android:id="@+id/detailTexture"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+    </com.google.android.material.card.MaterialCardView>
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -29,43 +37,62 @@
         android:layout_marginTop="8dp"
         android:orientation="horizontal">
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/backButton"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Back" />
+            android:text="Back"
+            style="@style/Widget.Material3.Button.TonalButton" />
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/scrollUpButton"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
             android:layout_weight="1"
-            android:text="Up" />
+            android:text="Up"
+            style="@style/Widget.Material3.Button.TonalButton" />
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/scrollDownButton"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
             android:layout_weight="1"
-            android:text="Down" />
+            android:text="Down"
+            style="@style/Widget.Material3.Button.TonalButton" />
+    </LinearLayout>
 
-        <Button
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:orientation="horizontal">
+
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/recordButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Record"
+            app:cornerRadius="12dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/shotButton"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
             android:layout_weight="1"
-            android:text="Record" />
+            android:text="Inspect"
+            style="@style/Widget.Material3.Button.TonalButton" />
     </LinearLayout>
 
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
-        android:text="Tap the preview to touch the virtual display. Coordinates are mapped display-local."
-        android:textColor="#9AA7B4"
+        android:text="Tap the preview to touch this virtual display. Inspect opens screenshot, hierarchy, OCR and text search."
+        android:textColor="@color/phantom_text_dim"
         android:textSize="12sp" />
 </LinearLayout>

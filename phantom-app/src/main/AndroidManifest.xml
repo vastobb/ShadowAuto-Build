@@ -40,6 +40,10 @@
             android:configChanges="orientation|screenSize|keyboardHidden" />
 
         <activity
+            android:name=".ui.InspectorActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".ui.LauncherActivity"
             android:exported="false" />
 

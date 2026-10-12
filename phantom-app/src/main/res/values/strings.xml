@@ -17,10 +17,4 @@
     <string name="shizuku_missing_start_detail">Shizuku is installed but its service is not running. Start it from the Shizuku app, then tap Reconnect.</string>
     <string name="authorize">Authorize</string>
     <string name="reconnect">Reconnect</string>
-    <string name="daemon_card_title">Privileged daemon</string>
-    <string name="daemon_idle_detail">Daemon is stopped. Authorize Shizuku above, then tap Start.</string>
-    <string name="daemon_start">Start</string>
-    <string name="daemon_stop">Stop</string>
-    <string name="sessions_title">Sessions (coming in the next milestone)</string>
-    <string name="sessions_detail">Virtual-display sessions, app launcher, live viewer, recording, OCR inspection and MCP setup are being rebuilt on top of this Shizuku foundation.</string>
 </resources>

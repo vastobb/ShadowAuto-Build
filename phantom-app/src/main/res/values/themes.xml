@@ -1,9 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="PhantomTheme" parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:windowBackground">#0F1419</item>
-        <item name="android:textColorPrimary">#E8EDF2</item>
-        <item name="android:textColorSecondary">#9AA7B4</item>
-        <item name="android:colorAccent">#5AC8FA</item>
+    <style name="PhantomTheme" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="android:windowBackground">@color/phantom_bg</item>
+        <item name="colorPrimary">@color/phantom_primary</item>
+        <item name="colorOnPrimary">@color/phantom_primary_text</item>
+        <item name="colorSurface">@color/phantom_surface</item>
+        <item name="colorOnSurface">@color/phantom_text</item>
+        <item name="android:textColorPrimary">@color/phantom_text</item>
+        <item name="android:textColorSecondary">@color/phantom_text_dim</item>
     </style>
 </resources>
