@@ -92,7 +92,8 @@ jobs:
           grep -q 'com.phantom.automation.shizuku' manifest.txt
           python3 - "$APK" <<'EOF'
           import sys, zipfile
-          blob = b"".join(z.read(n) for n in (z := zipfile.ZipFile(sys.argv[1])).namelist() if n.endswith(".dex"))
+          archive = zipfile.ZipFile(sys.argv[1])
+          blob = b"".join(archive.read(n) for n in archive.namelist() if n.endswith(".dex"))
           required = [
               b"Lcom/phantom/automation/shizuku/PhantomUserService;",
               b"Lrikka/shizuku/Shizuku;",
