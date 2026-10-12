@@ -80,8 +80,9 @@ public final class StaleDaemon {
     }
 
     /**
-     * Maps inodes to PIDs from {@code ls -l /proc/[0-9]*/fd} style output
-     * lines ({@code /proc/123/fd/45 -> socket:[6789]}).
+     * Maps inodes to PIDs from fd-listing output lines of the form
+     * {@code /proc/123/fd/45 -&gt; socket:[6789]} (arrow simplified; the
+     * parser accepts the real {@code -} arrow form too).
      */
     public static Map<String, List<Integer>> pidsByInode(String fdListing) {
         Map<String, List<Integer>> result = new LinkedHashMap<>();
