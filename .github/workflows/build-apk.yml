@@ -64,3 +64,16 @@ jobs:
           name: phantom-app-debug
           path: phantom-app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+
+      - name: Verify Phantom identity in APK
+        run: |
+          export ANDROID_HOME=/usr/local/lib/android/sdk
+          AAPT=$ANDROID_HOME/build-tools/36.0.0/aapt2
+          APK=phantom-app/build/outputs/apk/debug/phantom-app-debug.apk
+          $AAPT dump badging "$APK" | tee badging.txt | head -n 12
+          grep -q "application-label:'Phantom'" badging.txt
+          grep -q "launchable-activity:.*label='Phantom'" badging.txt
+          for res in ic_launcher_foreground ic_nav_home ic_nav_sessions ic_nav_apps ic_nav_inspect ic_nav_settings bottom_nav; do
+            unzip -l "$APK" | grep -q "$res" || { echo "missing resource: $res"; exit 1; }
+          done
+          echo "identity check passed"
