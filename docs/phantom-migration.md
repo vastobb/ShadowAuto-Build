@@ -41,9 +41,17 @@
   UNINITIALIZED/INITIALIZING/READY/FAILED with per-file missing-asset
   detail; models download on demand into app-private storage; native libs
   copied from the own APK (full-OCR builds only).
-- MCP (stdio, official SDK): server renamed `shadowauto` → `phantom`,
-  27 tools (sessions, codec, recording state, OCR, findText). Legacy
-  task tools kept.
+- Daemon lifecycle: `DaemonLifecycle` state machine (IDLE/BINDING/STARTING/
+  RUNNING/RECOVERING/ERROR) with 20s/30s/90s deadlines — no step can stick
+  forever; duplicates suppressed; disconnects land in ERROR; transitions
+  journaled (`DiagLog`) and logged to logcat (`PhantomDaemon`). `hello`
+  parsing isolated in `HelloCheck` (legacy/foreign/outdated/missing-method
+  verdicts). Recovery runs through the UserService `exec` transact and only
+  stops positively identified legacy shells.
+- MCP: installable `phantom-mcp` console script (`mcp/pyproject.toml`,
+  install-verified with 27 tools); path-free `opencode.json.example`;
+  Android setup screen carries no repo path and separates daemon status,
+  control-API status, and off-device OpenCode connectivity honestly.
 - Local API: default model `shadowauto-mcp` → `phantom-automation`
   (`SHADOWAUTO_MODEL_ID` restores the old ID); honest-handoff behavior
   kept, inference stays outside the endpoint (no self-calls).
