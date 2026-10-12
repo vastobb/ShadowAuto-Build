@@ -10,33 +10,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
           cache: gradle
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Install Android platform + build-tools
         run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
           sdkmanager --install "platform-tools" "platforms;android-36" "build-tools;36.0.0"
-          sdkmanager --licenses <<< "y" || true
-          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
-
-      - name: Accept SDK licenses
-        run: yes | sdkmanager --licenses || true
+          yes | sdkmanager --licenses || true
 
       - name: Make gradlew executable
         run: chmod +x gradlew
 
       - name: Build debug APKs (fast, no OCR native deps)
-        run: ./gradlew :android-shell:assembleDebug :controller-app:assembleDebug -PenablePaddleLiteOcr=false --stacktrace --info
+        run: ./gradlew :android-shell:assembleDebug :controller-app:assembleDebug -PenablePaddleLiteOcr=false --stacktrace
 
       - name: List APK outputs
         if: always()
