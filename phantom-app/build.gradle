@@ -6,6 +6,10 @@ android {
     namespace = "com.phantom.automation"
     compileSdk = 36
 
+    buildFeatures {
+        buildConfig = true
+    }
+
     defaultConfig {
         applicationId = "com.phantom.automation"
         minSdk = 29
