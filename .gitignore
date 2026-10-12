@@ -15,3 +15,4 @@ paddler-ocr/PaddleOcrAssets/
 paddler-ocr/cache/
 paddler-ocr/.cxx/
 mcp/__pycache__/
+*.egg-info/

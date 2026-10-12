@@ -1,2 +1,0 @@
-mcp_server
-shadowauto_backend
