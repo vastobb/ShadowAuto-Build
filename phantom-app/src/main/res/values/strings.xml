@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Phantom</string>
+    <string name="home_title">Phantom</string>
+    <string name="home_subtitle">Isolated virtual-display automation for AI agents</string>
+    <string name="shizuku_card_title">Privileged service (Shizuku)</string>
+    <string name="shizuku_ready">Shizuku: ready</string>
+    <string name="shizuku_ready_detail">Permission granted. Phantom can create virtual displays and dispatch input to them.</string>
+    <string name="shizuku_permission">Shizuku: permission needed</string>
+    <string name="shizuku_permission_detail">Phantom uses Shizuku to run automation with shell privileges (virtual displays, display-targeted input). No root required and nothing is sent off-device. Tap Authorize, then approve in the Shizuku prompt.</string>
+    <string name="shizuku_denied">Shizuku: permission denied</string>
+    <string name="shizuku_denied_detail">Permission was denied permanently (“don’t ask again”). Open the Shizuku app, allow Phantom, then tap Reconnect.</string>
+    <string name="shizuku_unsupported">Shizuku: version unsupported</string>
+    <string name="shizuku_unsupported_detail">This Shizuku version is too old (pre-v11). Update Shizuku, then tap Reconnect.</string>
+    <string name="shizuku_missing">Shizuku: not running</string>
+    <string name="shizuku_missing_install_detail">Install Shizuku (shizuku.rikka.app), start it (wireless debugging on Android 11+, or adb on older releases), then tap Reconnect.</string>
+    <string name="shizuku_missing_start_detail">Shizuku is installed but its service is not running. Start it from the Shizuku app, then tap Reconnect.</string>
+    <string name="authorize">Authorize</string>
+    <string name="reconnect">Reconnect</string>
+    <string name="sessions_title">Sessions (coming in the next milestone)</string>
+    <string name="sessions_detail">Virtual-display sessions, app launcher, live viewer, recording, OCR inspection and MCP setup are being rebuilt on top of this Shizuku foundation.</string>
+</resources>

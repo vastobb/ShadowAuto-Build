@@ -1,0 +1,38 @@
+plugins {
+    id "com.android.application"
+}
+
+android {
+    namespace = "com.phantom.automation"
+    compileSdk = 36
+
+    defaultConfig {
+        applicationId = "com.phantom.automation"
+        minSdk = 29
+        targetSdk = 36
+        versionCode = 1
+        versionName = "0.1"
+    }
+
+    buildTypes {
+        debug {
+            minifyEnabled false
+        }
+        release {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+def shizukuVersion = "13.1.5"
+
+dependencies {
+    implementation "com.google.code.gson:gson:2.11.0"
+    implementation "dev.rikka.shizuku:api:${shizukuVersion}"
+    implementation "dev.rikka.shizuku:provider:${shizukuVersion}"
+}

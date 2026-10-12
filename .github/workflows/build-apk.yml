@@ -33,13 +33,13 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build debug APKs (fast, no OCR native deps)
-        run: ./gradlew :android-shell:assembleDebug :controller-app:assembleDebug -PenablePaddleLiteOcr=false --stacktrace
+        run: ./gradlew :android-shell:assembleDebug :controller-app:assembleDebug :phantom-app:assembleDebug -PenablePaddleLiteOcr=false --stacktrace
 
       - name: List APK outputs
         if: always()
         run: |
           find . -type f -name "*.apk" | head -n 50
-          ls -lh android-shell/build/outputs/apk/debug/ controller-app/build/outputs/apk/debug/ || true
+          ls -lh android-shell/build/outputs/apk/debug/ controller-app/build/outputs/apk/debug/ phantom-app/build/outputs/apk/debug/ || true
 
       - name: Upload shell APK
         uses: actions/upload-artifact@v4
@@ -53,4 +53,11 @@ jobs:
         with:
           name: controller-app-debug
           path: controller-app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+      - name: Upload Phantom APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: phantom-app-debug
+          path: phantom-app/build/outputs/apk/debug/*.apk
           if-no-files-found: error

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="PhantomTheme" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#0F1419</item>
+        <item name="android:textColorPrimary">#E8EDF2</item>
+        <item name="android:textColorSecondary">#9AA7B4</item>
+        <item name="android:colorAccent">#5AC8FA</item>
+    </style>
+</resources>
