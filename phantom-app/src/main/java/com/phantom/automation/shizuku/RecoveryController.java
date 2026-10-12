@@ -137,7 +137,7 @@ public final class RecoveryController {
                         ? "Daemon refused to start (code " + result + ")." : detail);
                 return;
             }
-            DaemonController.Hello hello =
+            HelloCheck.Result hello =
                     DaemonController.hello("127.0.0.1", PORT, 8000);
             if (hello.ok) {
                 done(true, "Recovered: " + hello.summary + ".");
