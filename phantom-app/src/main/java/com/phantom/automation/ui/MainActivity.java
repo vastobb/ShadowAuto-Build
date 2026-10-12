@@ -50,6 +50,8 @@ public final class MainActivity extends Activity
                 daemon.stop();
             }
         });
+        findViewById(R.id.sessionsButton).setOnClickListener(v ->
+                startActivity(new android.content.Intent(this, SessionsActivity.class)));
         shizuku = new ShizukuManager(this);
         daemon = new DaemonController(this, this);
         shizuku.attach();

@@ -30,6 +30,20 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".ui.SessionsActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".ui.SessionDetailActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <service
+            android:name=".service.PhantomService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
         <service
             android:name=".shizuku.PhantomUserService"
             android:exported="true" />
