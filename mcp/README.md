@@ -1,4 +1,35 @@
-# ShadowAuto MCP + local model service
+# Phantom MCP server (installable)
+
+OpenCode drives Phantom through this stdio MCP server. Install it on the
+machine that runs OpenCode (e.g. Fedora) — no repository checkout needed
+on the Android device, and no paths to configure:
+
+```sh
+pip install "phantom-mcp @ git+https://github.com/vastobb/ShadowAuto-Build.git#subdirectory=mcp"
+# or from a local checkout: pip install ./mcp
+```
+
+`opencode.json`:
+
+```jsonc
+{ "mcp": { "servers": { "phantom": {
+  "type": "local",
+  "command": ["phantom-mcp"],
+  "environment": {"SHADOWAUTO_HOST": "127.0.0.1", "SHADOWAUTO_PORT": "43110"}
+} } } }
+```
+
+Bridge the namespaces (Android and Fedora loopbacks differ), loopback-only
+on both ends, no LAN exposure:
+
+```sh
+adb forward tcp:43110 tcp:43110
+```
+
+Then `opencode mcp list` (expect `phantom connected`). The Android MCP
+screen shows live daemon protocol status; OpenCode-side connectivity can
+only be verified on that machine. Legacy `mcp_server.py` direct launch
+still works for development.
 
 Native MCP support for ShadowAuto, built on the existing code. OpenCode
 becomes the brain (inspect screen → decide → call tool); the on-device

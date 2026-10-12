@@ -59,6 +59,15 @@
                         android:textColor="@color/phantom_text_dim"
                         android:textSize="13sp" />
 
+                    <TextView
+                        android:id="@+id/mcpApi"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text=""
+                        android:textColor="@color/phantom_text_dim"
+                        android:textSize="13sp" />
+
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/checkButton"
                         android:layout_width="match_parent"
@@ -158,23 +167,10 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="opencode.json snippet"
+                        android:text="Fedora setup instructions"
                         android:textColor="@color/phantom_text"
                         android:textSize="15sp"
                         android:textStyle="bold" />
-
-                    <com.google.android.material.textfield.TextInputLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:hint="Repo checkout path on your machine">
-
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/repoPath"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:inputType="textUri" />
-                    </com.google.android.material.textfield.TextInputLayout>
 
                     <TextView
                         android:id="@+id/mcpConfig"
@@ -192,7 +188,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="8dp"
-                        android:text="Copy configuration" />
+                        android:text="Copy instructions" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
         </LinearLayout>

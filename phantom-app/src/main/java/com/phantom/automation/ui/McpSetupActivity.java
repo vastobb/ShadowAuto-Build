@@ -8,9 +8,7 @@ import android.widget.TextView;
 
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.snackbar.Snackbar;
-import com.google.android.material.textfield.TextInputEditText;
 import com.phantom.automation.R;
-import com.phantom.automation.configuration.PhantomSettings;
 import com.phantom.automation.rpc.Rpc;
 
 import org.json.JSONArray;
@@ -19,64 +17,47 @@ import org.json.JSONObject;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** MCP connection status, setup steps, and copyable OpenCode config. */
+/**
+ * MCP setup without any repository path: the installable
+ * {@code phantom-mcp} tool (pip) needs no checkout, so the generated
+ * instructions contain real commands only. OpenCode itself runs off-device
+ * over stdio and reports nothing back — this screen states that honestly
+ * instead of claiming a connection it cannot see.
+ */
 public final class McpSetupActivity extends Activity {
     private final ExecutorService io = Executors.newCachedThreadPool();
     private TextView statusLine;
+    private TextView apiLine;
+    private TextView toolsLine;
     private TextView configText;
-    private TextInputEditText repoPath;
-
-    private static final String MCP_SERVER_REL = "/mcp/mcp_server.py";
+    private String instructions = "";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_mcp_setup);
         statusLine = findViewById(R.id.mcpStatus);
+        apiLine = findViewById(R.id.mcpApi);
+        toolsLine = findViewById(R.id.mcpTools);
         configText = findViewById(R.id.mcpConfig);
-        repoPath = findViewById(R.id.repoPath);
-        repoPath.setText(PhantomSettings.load(this).mcpRepoPath);
-        ((TextView) findViewById(R.id.mcpSteps)).setText(
-                "OpenCode runs on your machine, not on this phone — only two "
-                        + "things connect them:\n"
-                        + "1. adb forward tcp:43110 tcp:43110 (one command, on your machine).\n"
-                        + "2. The config below, pasted into OpenCode's opencode.json "
-                        + "with your real checkout path.\n"
-                        + "Then: opencode mcp list — expect phantom connected.");
-        ((TextView) findViewById(R.id.mcpTools)).setText(
+        toolsLine.setText(
                 "Sessions: open/close/status · Apps: list/launch · Observe: screenshot, "
                         + "hierarchy, OCR, find-text · Act: tap, long-press, swipe, scroll, "
                         + "text, keys, back, targets · Recording state · Tasks: start/stop "
                         + "· Logs · Codec capabilities.");
         MaterialButton copy = findViewById(R.id.copyButton);
         copy.setOnClickListener(v -> {
-            String config = buildConfig();
-            if (config == null) {
-                snack("Enter your real repo checkout path first (e.g. /home/you/ShadowAuto-Build).");
+            if (instructions.isEmpty()) {
+                snack("Start the daemon first — instructions need the live protocol version.");
                 return;
             }
             ClipboardManager clipboard = getSystemService(ClipboardManager.class);
             if (clipboard != null) {
-                clipboard.setPrimaryClip(ClipData.newPlainText("Phantom MCP config", config));
-                snack("Configuration copied.");
-            }
-        });
-        repoPath.addTextChangedListener(new android.text.TextWatcher() {
-            @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
-            }
-
-            @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count) {
-                renderConfig();
-            }
-
-            @Override
-            public void afterTextChanged(android.text.Editable s) {
+                clipboard.setPrimaryClip(ClipData.newPlainText("Phantom MCP setup", instructions));
+                snack("Instructions copied.");
             }
         });
         findViewById(R.id.checkButton).setOnClickListener(v -> check());
-        renderConfig();
     }
 
     @Override
@@ -92,56 +73,47 @@ public final class McpSetupActivity extends Activity {
     }
 
     private void check() {
-        statusLine.setText("Checking daemon protocol…");
+        statusLine.setText("Checking…");
+        apiLine.setText("");
         io.execute(() -> {
             try {
                 JSONObject hello = Rpc.call("hello", new JSONObject(), 8000);
                 JSONArray methods = hello.optJSONArray("methods");
                 int count = methods == null ? 0 : methods.length();
-                String text = "Daemon: " + hello.optString("app")
-                        + " protocol v" + hello.optInt("version")
-                        + " · " + count + " methods"
-                        + (hasRequired(methods) ? " · MCP ready."
-                                : " · MISSING methods — reinstall Phantom.");
-                runOnUiThread(() -> statusLine.setText(text));
+                int version = hello.optInt("version");
+                boolean ready = hasRequired(methods);
+                String status = "Phantom service: running (protocol v" + version + ").";
+                String api = "Control API: 127.0.0.1:43110 reachable, " + count
+                        + " methods" + (ready ? "." : " — MISSING methods, reinstall Phantom.");
+                String fedora = "OpenCode (Fedora): not visible from this device. "
+                        + "Stdio servers report nothing back — verify there with "
+                        + "`opencode mcp list` (expect phantom connected).";
+                instructions = "Phantom MCP setup (OpenCode on Fedora):\n"
+                        + "1. adb forward tcp:43110 tcp:43110\n"
+                        + "   (bridges Fedora loopback to Android loopback; loopback-only, no LAN)\n"
+                        + "2. pip install \"phantom-mcp @ "
+                        + "git+https://github.com/vastobb/ShadowAuto-Build.git#subdirectory=mcp\"\n"
+                        + "3. opencode.json mcp.servers.phantom: "
+                        + "{\"type\":\"local\",\"command\":[\"phantom-mcp\"]}\n"
+                        + "4. opencode mcp list\n"
+                        + "Daemon verified here: phantom protocol v" + version
+                        + ", " + count + " methods.";
+                runOnUiThread(() -> {
+                    statusLine.setText(status);
+                    apiLine.setText(api + "\n" + fedora);
+                    configText.setText(instructions);
+                });
             } catch (Exception e) {
-                runOnUiThread(() -> statusLine.setText(e.getMessage()));
+                instructions = "";
+                runOnUiThread(() -> {
+                    statusLine.setText("Phantom service: not running.");
+                    apiLine.setText(e.getMessage());
+                    configText.setText(
+                            "Start the daemon on Home first — setup instructions "
+                                    + "are generated from the live protocol version.");
+                });
             }
         });
-    }
-
-    /** Complete config, or null when the repo path is not usable yet. */
-    private String buildConfig() {
-        String repo = repoPath.getText() == null ? ""
-                : repoPath.getText().toString().trim();
-        if (repo.isEmpty() || !repo.startsWith("/") || repo.contains("<") || repo.contains(">")) {
-            return null;
-        }
-        while (repo.endsWith("/") && repo.length() > 1) {
-            repo = repo.substring(0, repo.length() - 1);
-        }
-        return "{\n"
-                + "  \"$schema\": \"https://opencode.ai/config.json\",\n"
-                + "  \"mcp\": { \"servers\": { \"phantom\": {\n"
-                + "    \"type\": \"local\",\n"
-                + "    \"command\": [\"python3\", \"" + repo + MCP_SERVER_REL + "\"],\n"
-                + "    \"environment\": {\n"
-                + "      \"SHADOWAUTO_HOST\": \"127.0.0.1\",\n"
-                + "      \"SHADOWAUTO_PORT\": \"43110\"\n"
-                + "    }\n"
-                + "  } } }\n"
-                + "}";
-    }
-
-    private void renderConfig() {
-        String config = buildConfig();
-        configText.setText(config == null
-                ? "Enter your checkout path above — nothing to copy until it is set."
-                : config);
-        PhantomSettings settings = PhantomSettings.load(this);
-        settings.mcpRepoPath = repoPath.getText() == null ? ""
-                : repoPath.getText().toString().trim();
-        settings.save(this);
     }
 
     private boolean hasRequired(JSONArray methods) {

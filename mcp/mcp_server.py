@@ -203,5 +203,10 @@ def stop_task(task_id: str = "") -> str:
     return _call(rpc().stop_task, task_id)
 
 
-if __name__ == "__main__":
+def main() -> None:
+    """Console-script entry point (phantom-mcp): stdio transport."""
     mcp.run(transport="stdio")
+
+
+if __name__ == "__main__":
+    main()

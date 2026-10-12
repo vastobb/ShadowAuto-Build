@@ -1,0 +1,2 @@
+[console_scripts]
+phantom-mcp = mcp_server:main

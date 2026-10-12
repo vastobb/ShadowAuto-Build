@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "phantom-mcp"
+version = "0.1.0"
+description = "Phantom MCP server: OpenCode drives Android virtual-display sessions over stdio"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+dependencies = ["mcp==2.3.0"]
+
+[project.scripts]
+phantom-mcp = "mcp_server:main"
+
+[tool.setuptools]
+py-modules = ["mcp_server", "shadowauto_backend"]

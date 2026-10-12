@@ -43,22 +43,25 @@ before reporting success. Unknown owners are refused with an explanation.
 
 ## OpenCode configuration
 
-On the Fedora container (a different loopback than Android):
+Install on the machine that runs OpenCode (Fedora) — no checkout needed
+on the phone, no paths to enter anywhere:
 
 ```sh
+pip install "phantom-mcp @ git+https://github.com/vastobb/ShadowAuto-Build.git#subdirectory=mcp"
 adb forward tcp:43110 tcp:43110
-python3 -m pip install -r mcp/requirements.txt
 ```
 
-In the Phantom app, open MCP Setup, enter your machine's repo checkout
-path, and copy the generated config into OpenCode's `opencode.json`
-(see `mcp/opencode.json.example`). Copy is only offered once the path is
-a real absolute path — no `<repo>` placeholders. The screen's Check
-button verifies the live daemon protocol (app, version, method count).
-The generated config looks like `mcp/opencode.json.example` with your
-absolute path filled in.
+`opencode.json` (full example in `mcp/opencode.json.example`):
 
-`opencode mcp list` → `phantom connected`. Flow: `check_connection` →
+```jsonc
+{ "mcp": { "servers": { "phantom": {
+  "type": "local", "command": ["phantom-mcp"] } } } }
+```
+
+In the Phantom app, MCP Setup shows the live daemon protocol and the
+exact instructions generated from it. `opencode mcp list` →
+`phantom connected`. Android and Fedora loopbacks differ; the forward
+bridges them, loopback-only on both ends. Flow: `check_connection` →
 `open_session` → `list_apps` → `launch_app` → loop (`dump_ui` /
 `screenshot` / `ocr_recognize` / `find_text` → `tap_target`/`tap`/`swipe`/
 `scroll`/`focus_input`+`input_text`/`press_key`/`press_back`) →

@@ -4,7 +4,7 @@
     "servers": {
       "phantom": {
         "type": "local",
-        "command": ["python3", "/home/flux/ShadowAuto-Build/mcp/mcp_server.py"],
+        "command": ["phantom-mcp"],
         "environment": {
           "SHADOWAUTO_HOST": "127.0.0.1",
           "SHADOWAUTO_PORT": "43110",

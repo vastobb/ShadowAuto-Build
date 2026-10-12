@@ -95,6 +95,8 @@ final class AutomationEngine {
 
     synchronized JsonObject statusJson() {
         JsonObject object = new JsonObject();
+        object.addProperty("app", RpcProtocol.APP);
+        object.addProperty("protocol", RpcProtocol.VERSION);
         boolean running = false;
         int displayId = -1;
         for (TaskState task : tasks.values()) {

@@ -1,6 +1,8 @@
 package com.phantom.automation.shizuku;
 
 import android.content.Context;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.RemoteException;
 
 import java.io.BufferedReader;
@@ -14,8 +16,10 @@ import java.util.concurrent.Executors;
 
 /**
  * Explicit UI-to-engine interface: binds the Shizuku UserService, starts the
- * loopback RPC daemon, and verifies it with a ping. All Binder/RPC errors
- * surface as actionable state, never silent success.
+ * loopback RPC daemon, and verifies the Phantom handshake. Behavior is driven
+ * by {@link DaemonLifecycle}: every async step has a timeout (the UI can
+ * never stick), duplicates are suppressed, disconnects land in ERROR, and
+ * every transition is journaled to {@link DiagLog}.
  */
 public final class DaemonController implements ServiceConnector.Listener {
     public enum State {
@@ -31,26 +35,40 @@ public final class DaemonController implements ServiceConnector.Listener {
     }
 
     public static final int RPC_PORT = 43110;
-    private static final int PING_TIMEOUT_MS = 5000;
+    private static final int HELLO_TIMEOUT_MS = 8000;
+    private static final long WATCHDOG_MS = 1000;
 
     private final Context context;
     private final Listener listener;
     private final ExecutorService io = Executors.newSingleThreadExecutor();
+    private final Handler watchdog = new Handler(Looper.getMainLooper());
+    private final DiagLog diag = new DiagLog();
+    private final DaemonLifecycle lifecycle = new DaemonLifecycle(diag);
     private ServiceConnector connector;
     private PhantomUserService.Client client;
-    private volatile State state = State.IDLE;
-    private volatile RecoveryController.Listener pendingRecovery;
+    private RecoveryController.Listener pendingRecovery;
+    private boolean released;
 
     public DaemonController(Context context, Listener listener) {
         this.context = context.getApplicationContext();
         this.listener = listener;
     }
 
+    /** Last hello summary after RUNNING ("" otherwise). */
+    public String helloSummary() {
+        return lifecycle.state() == DaemonLifecycle.State.RUNNING ? lifecycle.detail() : "";
+    }
+
+    public DiagLog diagnostics() {
+        return diag;
+    }
+
     public void start() {
-        if (state == State.BINDING || state == State.STARTING) {
+        if (!lifecycle.requestStart(now())) {
             return;
         }
-        set(State.BINDING, "Binding privileged service…");
+        emit();
+        armWatchdog();
         if (connector == null) {
             connector = new ServiceConnector(context, this);
         }
@@ -71,7 +89,8 @@ public final class DaemonController implements ServiceConnector.Listener {
             if (connector != null) {
                 connector.unbind();
             }
-            set(State.IDLE, "Privileged service stopped.");
+            lifecycle.onStopped(now());
+            emit();
         });
     }
 
@@ -90,7 +109,9 @@ public final class DaemonController implements ServiceConnector.Listener {
             if (connector != null) {
                 connector.unbind();
             }
-            set(State.BINDING, "Restarting privileged service…");
+            lifecycle.requestRestart(now());
+            emit();
+            armWatchdog();
             if (connector == null) {
                 connector = new ServiceConnector(context, this);
             }
@@ -106,12 +127,18 @@ public final class DaemonController implements ServiceConnector.Listener {
     public void recover(RecoveryController.Listener recovery) {
         pendingRecovery = null;
         if (client != null) {
-            RecoveryController controller = new RecoveryController(client, recovery);
+            lifecycle.requestRecover(now());
+            emit();
+            armWatchdog();
+            RecoveryController controller = new RecoveryController(client,
+                    wrapRecovery(recovery));
             io.execute(controller::run);
             return;
         }
         pendingRecovery = recovery;
-        set(State.BINDING, "Binding privileged service for recovery…");
+        lifecycle.requestRecover(now());
+        emit();
+        armWatchdog();
         if (connector == null) {
             connector = new ServiceConnector(context, this);
         }
@@ -119,6 +146,8 @@ public final class DaemonController implements ServiceConnector.Listener {
     }
 
     public void release() {
+        released = true;
+        watchdog.removeCallbacksAndMessages(null);
         try {
             if (connector != null) {
                 connector.unbind();
@@ -136,24 +165,15 @@ public final class DaemonController implements ServiceConnector.Listener {
         RecoveryController.Listener recovery = pendingRecovery;
         pendingRecovery = null;
         if (recovery != null) {
+            lifecycle.onBound(now());
+            emit();
             RecoveryController controller = new RecoveryController(service,
-                    new RecoveryController.Listener() {
-                        @Override
-                        public void onStep(String message) {
-                            recovery.onStep(message);
-                            set(State.STARTING, message);
-                        }
-
-                        @Override
-                        public void onDone(boolean ok, String message) {
-                            recovery.onDone(ok, message);
-                            set(ok ? State.RUNNING : State.ERROR, message);
-                        }
-                    });
+                    wrapRecovery(recovery));
             io.execute(controller::run);
             return;
         }
-        set(State.STARTING, "Starting daemon on 127.0.0.1:" + RPC_PORT + "…");
+        lifecycle.onBound(now());
+        emit();
         io.execute(() -> {
             try {
                 int result = service.startDaemon(RPC_PORT);
@@ -162,25 +182,25 @@ public final class DaemonController implements ServiceConnector.Listener {
                     if (detail == null || detail.isEmpty()) {
                         detail = "Daemon refused to start (code " + result + ").";
                     }
-                    set(State.ERROR, detail);
+                    lifecycle.onFailed(now(), detail);
+                    emit();
                     return;
                 }
-                // Defense in depth: the daemon verified its own hello before
-                // reporting success, but an outdated UserService from a
-                // previous APK install may still be bound — re-check here.
-                Hello hello = hello("127.0.0.1", RPC_PORT, PING_TIMEOUT_MS);
+                // The daemon verified its own hello before reporting success,
+                // but an outdated UserService from a previous APK install may
+                // still be bound — re-check here before claiming RUNNING.
+                HelloCheck.Result hello = hello("127.0.0.1", RPC_PORT, HELLO_TIMEOUT_MS);
                 if (!hello.ok) {
-                    set(State.ERROR, hello.error);
+                    lifecycle.onFailed(now(), hello.error);
+                    emit();
                     return;
                 }
-                if (ping("127.0.0.1", RPC_PORT, PING_TIMEOUT_MS)) {
-                    set(State.RUNNING, "Daemon running: " + hello.summary + ".");
-                } else {
-                    set(State.ERROR, "Daemon answered hello but ping timed out. "
-                            + "Restart Shizuku and tap Start again.");
-                }
+                lifecycle.onStarted(now(), "Daemon running: " + hello.summary + ".");
+                emit();
             } catch (RemoteException e) {
-                set(State.ERROR, "Binder call failed: " + ServiceConnector.describeError(e));
+                lifecycle.onFailed(now(),
+                        "Binder call failed: " + ServiceConnector.describeError(e));
+                emit();
             }
         });
     }
@@ -188,29 +208,91 @@ public final class DaemonController implements ServiceConnector.Listener {
     @Override
     public void onDisconnected() {
         client = null;
-        set(State.ERROR, "Privileged service disconnected (Shizuku restarted?). "
-                + "Tap Start to reconnect.");
+        lifecycle.onDisconnected(now());
+        emit();
     }
 
     @Override
     public void onError(String message) {
-        set(State.ERROR, message);
+        lifecycle.onFailed(now(), message);
+        emit();
     }
 
-    private void set(State next, String detail) {
-        state = next;
-        if (listener != null) {
-            listener.onState(next, detail);
+    private RecoveryController.Listener wrapRecovery(RecoveryController.Listener recovery) {
+        return new RecoveryController.Listener() {
+            @Override
+            public void onStep(String message) {
+                recovery.onStep(message);
+                lifecycle.onProgress(now(), message);
+                emit();
+            }
+
+            @Override
+            public void onDone(boolean ok, String message) {
+                recovery.onDone(ok, message);
+                if (ok) {
+                    lifecycle.onStarted(now(), message);
+                } else {
+                    lifecycle.onFailed(now(), message);
+                }
+                emit();
+            }
+        };
+    }
+
+    private void emit() {
+        if (listener != null && !released) {
+            android.util.Log.i("PhantomDaemon", lifecycle.state() + ": " + lifecycle.detail());
+            listener.onState(map(lifecycle.state()), lifecycle.detail());
         }
     }
 
-    /** One-shot NDJSON ping over loopback. False on any failure. */
-    static boolean ping(String host, int port, int timeoutMs) {
-        return hello(host, port, timeoutMs).ok;
+    private void armWatchdog() {
+        watchdog.removeCallbacksAndMessages(null);
+        watchdog.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                DaemonLifecycle.State before = lifecycle.state();
+                lifecycle.poll(now());
+                if (lifecycle.state() != before) {
+                    emit();
+                }
+                if (!released && isTransient(lifecycle.state())) {
+                    watchdog.postDelayed(this, WATCHDOG_MS);
+                }
+            }
+        }, WATCHDOG_MS);
+    }
+
+    private static boolean isTransient(DaemonLifecycle.State state) {
+        return state == DaemonLifecycle.State.BINDING
+                || state == DaemonLifecycle.State.STARTING
+                || state == DaemonLifecycle.State.RECOVERING;
+    }
+
+    private static State map(DaemonLifecycle.State state) {
+        switch (state) {
+            case RUNNING:
+                return State.RUNNING;
+            case ERROR:
+                return State.ERROR;
+            case IDLE:
+                return State.IDLE;
+            case RECOVERING:
+            case STARTING:
+                return State.STARTING;
+            case BINDING:
+            default:
+                return State.BINDING;
+        }
+    }
+
+    private static long now() {
+        return System.currentTimeMillis();
     }
 
     /** Loopback hello handshake with identity + capability validation. */
-    static Hello hello(String host, int port, int timeoutMs) {
+    static HelloCheck.Result hello(String host, int port, int timeoutMs) {
         try (Socket socket = new Socket()) {
             socket.connect(new InetSocketAddress(host, port), timeoutMs);
             socket.setSoTimeout(timeoutMs);
@@ -225,81 +307,12 @@ public final class DaemonController implements ServiceConnector.Listener {
                 if (!line.contains("\"id\":1")) {
                     continue;
                 }
-                if (!line.contains("\"app\":\"phantom\"")) {
-                    if (line.contains("-32601")) {
-                        return Hello.fail("A stale legacy shell answers on port " + port
-                                + " (no hello/listApps). Kill it: adb shell "
-                                + "\"kill $(cat /data/local/tmp/silent-auto.pid)\", "
-                                + "then tap Start again.");
-                    }
-                    return Hello.fail("A foreign service answers on port " + port
-                            + ". Free the port, then retry.");
-                }
-                java.util.List<String> methods = methodsOf(line);
-                java.util.List<String> missing = missingRequired(methods);
-                if (!missing.isEmpty()) {
-                    return Hello.fail("Daemon protocol v? is missing: " + missing
-                            + ". Reinstall the current Phantom APK, then retry.");
-                }
-                return Hello.ok("phantom protocol, " + methods.size() + " methods");
+                return HelloCheck.check(line, port);
             }
         } catch (Throwable e) {
             String message = e.getMessage() == null ? e.toString() : e.getMessage();
-            return Hello.fail("Daemon unreachable on " + host + ":" + port
-                    + " (" + message + "). Tap Start to launch it.");
+            return HelloCheck.unreachable(host, port, message);
         }
-        return Hello.fail("Daemon closed the connection without hello.");
-    }
-
-    static final class Hello {
-        final boolean ok;
-        final String summary;
-        final String error;
-
-        private Hello(boolean ok, String summary, String error) {
-            this.ok = ok;
-            this.summary = summary;
-            this.error = error;
-        }
-
-        static Hello ok(String summary) {
-            return new Hello(true, summary, "");
-        }
-
-        static Hello fail(String error) {
-            return new Hello(false, "", error);
-        }
-    }
-
-    private static java.util.List<String> methodsOf(String line) {
-        java.util.List<String> methods = new java.util.ArrayList<>();
-        int start = line.indexOf("\"methods\"");
-        if (start < 0) {
-            return methods;
-        }
-        int array = line.indexOf('[', start);
-        int end = line.indexOf(']', array);
-        if (array < 0 || end < 0) {
-            return methods;
-        }
-        for (String part : line.substring(array + 1, end).split(",")) {
-            String name = part.trim();
-            if (name.length() >= 2 && name.startsWith("\"") && name.endsWith("\"")) {
-                methods.add(name.substring(1, name.length() - 1));
-            }
-        }
-        return methods;
-    }
-
-    private static java.util.List<String> missingRequired(java.util.List<String> methods) {
-        String[] required = {"hello", "openSession", "closeSession", "listApps",
-                "launchApp", "dumpUi", "screenshot", "status", "logs"};
-        java.util.List<String> missing = new java.util.ArrayList<>();
-        for (String name : required) {
-            if (!methods.contains(name)) {
-                missing.add(name);
-            }
-        }
-        return missing;
+        return HelloCheck.check(null, port);
     }
 }
