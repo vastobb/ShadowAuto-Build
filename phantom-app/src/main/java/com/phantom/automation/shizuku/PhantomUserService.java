@@ -17,8 +17,9 @@ import android.util.Log;
  * <p>Protocol (all calls target the UserService Binder directly):
  * <ul>
  *   <li>1 {@code getState}: no args, reply int (0=idle, 1=running).
- *   <li>2 {@code startDaemon}: arg int port, reply int (0=ok).
+ *   <li>2 {@code startDaemon}: arg int port, reply int (0=ok, else failed).
  *   <li>3 {@code stopDaemon}: no args/reply payload.
+ *   <li>4 {@code getError}: no args, reply string (last daemon error).
  *   <li>16777115 Shizuku destroy: cleanup, then exit this process.
  * </ul>
  */
@@ -27,6 +28,7 @@ public final class PhantomUserService extends Binder {
     static final int TX_GET_STATE = 1;
     static final int TX_START_DAEMON = 2;
     static final int TX_STOP_DAEMON = 3;
+    static final int TX_GET_ERROR = 4;
     /** Fixed Shizuku destroy transaction: cleanup, then exit this process. */
     static final int DESTROY_CODE = 16777115;
 
@@ -81,6 +83,10 @@ public final class PhantomUserService extends Binder {
                 PrivilegedDaemon.stop();
                 reply.writeNoException();
                 return true;
+            case TX_GET_ERROR:
+                reply.writeNoException();
+                reply.writeString(PrivilegedDaemon.error());
+                return true;
             default:
                 return super.onTransact(code, data, reply, flags);
         }
@@ -130,6 +136,20 @@ public final class PhantomUserService extends Binder {
                 data.writeInterfaceToken(DESCRIPTOR);
                 binder.transact(TX_STOP_DAEMON, data, reply, 0);
                 reply.readException();
+            } finally {
+                data.recycle();
+                reply.recycle();
+            }
+        }
+
+        public String getError() throws RemoteException {
+            Parcel data = Parcel.obtain();
+            Parcel reply = Parcel.obtain();
+            try {
+                data.writeInterfaceToken(DESCRIPTOR);
+                binder.transact(TX_GET_ERROR, data, reply, 0);
+                reply.readException();
+                return reply.readString();
             } finally {
                 data.recycle();
                 reply.recycle();

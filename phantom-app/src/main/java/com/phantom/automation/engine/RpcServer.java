@@ -80,6 +80,9 @@ final class RpcServer {
         try {
             String method = JsonRpc.text(request, "method");
             JsonObject params = JsonRpc.params(request);
+            if ("hello".equals(method)) {
+                return JsonRpc.result(id, RpcProtocol.hello());
+            }
             if ("ping".equals(method)) {
                 return JsonRpc.result(id, "pong");
             }
@@ -248,7 +251,8 @@ final class RpcServer {
                 value.addProperty("value", "started");
                 return JsonRpc.result(id, value);
             }
-            return JsonRpc.error(id, -32601, "unknown method: " + method);
+            return JsonRpc.error(id, -32601, "unknown method: " + method
+                    + " (" + RpcProtocol.APP + " protocol v" + RpcProtocol.VERSION + ")");
         } catch (Throwable e) {
             return JsonRpc.error(id, -32000, e.getMessage());
         }

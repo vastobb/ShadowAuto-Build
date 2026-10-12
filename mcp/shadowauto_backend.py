@@ -129,6 +129,36 @@ class ShellRpc:
         except ShadowAutoError as exc:
             return False, str(exc)
 
+    def hello(self, timeout: float = 5) -> dict:
+        """Identity handshake: {app, version, methods}. Raises on legacy daemons."""
+        try:
+            reply = self.call("hello", {}, timeout=timeout)
+        except ShadowAutoError as exc:
+            if "does not know method" in str(exc):
+                raise ShadowAutoError(
+                    "stale legacy shell answers (no hello/listApps). Kill it: "
+                    "adb shell \"kill $(cat /data/local/tmp/silent-auto.pid)\" "
+                    "then Start the Phantom daemon."
+                ) from exc
+            raise
+        result = reply.result
+        if not isinstance(result, dict) or result.get("app") != "phantom":
+            raise ShadowAutoError(f"foreign service on {self.host}:{self.port}: {result!r}")
+        return result
+
+    def require_phantom(self, required: tuple = ("openSession", "listApps", "launchApp",
+                                                  "dumpUi", "screenshot"),
+                         timeout: float = 5) -> dict:
+        """hello + required-method check. Never returns a fake success."""
+        info = self.hello(timeout=timeout)
+        methods = info.get("methods", [])
+        missing = [m for m in required if m not in methods]
+        if missing:
+            raise ShadowAutoError(
+                f"daemon protocol v{info.get('version')} is missing: {missing}. "
+                "Reinstall the current Phantom APK.")
+        return info
+
     # -- existing RPC ---------------------------------------------------
     def ping(self) -> RpcResult:
         return self.call("ping", {})

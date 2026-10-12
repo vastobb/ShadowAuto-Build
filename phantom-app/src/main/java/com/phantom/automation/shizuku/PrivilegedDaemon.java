@@ -16,4 +16,8 @@ final class PrivilegedDaemon {
     static void stop() {
         com.phantom.automation.engine.EngineHost.stop();
     }
+
+    static String error() {
+        return com.phantom.automation.engine.EngineHost.lastError();
+    }
 }
