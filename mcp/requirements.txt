@@ -1,0 +1,2 @@
+# Pinned 2026-10. Install with: python3 -m pip install --user -r requirements.txt
+mcp==2.3.0

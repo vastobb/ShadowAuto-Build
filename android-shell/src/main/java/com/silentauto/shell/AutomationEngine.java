@@ -41,11 +41,19 @@ final class AutomationEngine {
     private final AtomicInteger nextTaskId = new AtomicInteger(1);
     private UiBridge ui;
     private PaddleOcrEngine ocr;
+    private McpSessions mcp;
 
     AutomationEngine(Config config, LogHub logs) {
         this.baseConfig = config;
         this.logs = logs;
         this.appCatalog = new AppCatalog(logs);
+    }
+
+    synchronized McpSessions mcp() {
+        if (mcp == null) {
+            mcp = new McpSessions(logs);
+        }
+        return mcp;
     }
 
     synchronized String startTask(TaskRequest request) {
@@ -109,6 +117,11 @@ final class AutomationEngine {
             array.add(item);
         }
         object.add("tasks", array);
+        try {
+            object.add("mcpSessions", mcp().statusArray());
+        } catch (Throwable ignored) {
+            object.add("mcpSessions", new JsonArray());
+        }
         return object;
     }
 

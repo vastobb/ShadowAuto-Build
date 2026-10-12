@@ -71,12 +71,112 @@ final class RpcServer {
                 return JsonRpc.result(id, JsonRpc.stringArray(logs.snapshot()));
             }
             if ("dumpUi".equals(method)) {
+                String dumpSession = JsonRpc.text(params, "sessionId");
+                if (!dumpSession.isEmpty()) {
+                    return JsonRpc.result(id, engine.mcp().dumpUi(
+                            dumpSession,
+                            integer(params, "displayId", 0),
+                            integer(params, "width", 0),
+                            integer(params, "height", 0),
+                            JsonRpc.text(params, "mode")
+                    ));
+                }
                 return JsonRpc.result(id, engine.dumpUiJson(
                         integer(params, "displayId", 0),
                         integer(params, "width", 0),
                         integer(params, "height", 0),
                         JsonRpc.text(params, "mode")
                 ));
+            }
+            if ("openSession".equals(method)) {
+                return JsonRpc.result(id, engine.mcp().openSession(
+                        JsonRpc.text(params, "sessionId"),
+                        integer(params, "width", 0),
+                        integer(params, "height", 0)
+                ));
+            }
+            if ("closeSession".equals(method)) {
+                return JsonRpc.result(id, engine.mcp().closeSession(JsonRpc.text(params, "sessionId")));
+            }
+            if ("listApps".equals(method)) {
+                JsonObject value = new JsonObject();
+                value.add("apps", engine.mcp().listApps());
+                return JsonRpc.result(id, value);
+            }
+            if ("launchApp".equals(method)) {
+                return JsonRpc.result(id, engine.mcp().launchApp(
+                        JsonRpc.text(params, "sessionId"),
+                        JsonRpc.text(params, "packageName")
+                ));
+            }
+            if ("screenshot".equals(method)) {
+                return JsonRpc.result(id, engine.mcp().screenshot(
+                        JsonRpc.text(params, "sessionId"),
+                        integer(params, "displayId", 0)
+                ));
+            }
+            if ("tap".equals(method)) {
+                return JsonRpc.result(id, engine.mcp().tap(
+                        JsonRpc.text(params, "sessionId"),
+                        integer(params, "x", 0),
+                        integer(params, "y", 0)
+                ));
+            }
+            if ("longPress".equals(method)) {
+                return JsonRpc.result(id, engine.mcp().longPress(
+                        JsonRpc.text(params, "sessionId"),
+                        integer(params, "x", 0),
+                        integer(params, "y", 0),
+                        integer(params, "durationMs", 550)
+                ));
+            }
+            if ("swipe".equals(method)) {
+                return JsonRpc.result(id, engine.mcp().swipe(
+                        JsonRpc.text(params, "sessionId"),
+                        integer(params, "startX", 0),
+                        integer(params, "startY", 0),
+                        integer(params, "endX", 0),
+                        integer(params, "endY", 0),
+                        integer(params, "durationMs", 420)
+                ));
+            }
+            if ("scroll".equals(method)) {
+                return JsonRpc.result(id, engine.mcp().scroll(
+                        JsonRpc.text(params, "sessionId"),
+                        JsonRpc.text(params, "direction"),
+                        integer(params, "distance", 0)
+                ));
+            }
+            if ("pressKey".equals(method)) {
+                return JsonRpc.result(id, engine.mcp().pressKey(
+                        JsonRpc.text(params, "sessionId"),
+                        JsonRpc.text(params, "key")
+                ));
+            }
+            if ("pressBack".equals(method)) {
+                return JsonRpc.result(id, engine.mcp().pressBack(JsonRpc.text(params, "sessionId")));
+            }
+            if ("inputText".equals(method)) {
+                return JsonRpc.result(id, engine.mcp().inputText(
+                        JsonRpc.text(params, "sessionId"),
+                        JsonRpc.text(params, "text")
+                ));
+            }
+            if ("tapTarget".equals(method)) {
+                return JsonRpc.result(id, engine.mcp().tapTarget(
+                        JsonRpc.text(params, "sessionId"),
+                        integer(params, "targetIndex", 0)
+                ));
+            }
+            if ("focusInput".equals(method)) {
+                return JsonRpc.result(id, engine.mcp().focusInput(
+                        JsonRpc.text(params, "sessionId"),
+                        integer(params, "inputIndex", 0),
+                        JsonRpc.text(params, "query")
+                ));
+            }
+            if ("clearText".equals(method)) {
+                return JsonRpc.result(id, engine.mcp().clearText(JsonRpc.text(params, "sessionId")));
             }
             if ("stopTask".equals(method)) {
                 String taskId = JsonRpc.text(params, "taskId");
