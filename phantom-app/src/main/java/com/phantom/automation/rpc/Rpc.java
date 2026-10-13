@@ -17,7 +17,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public final class Rpc {
     public static final String HOST = "127.0.0.1";
-    public static final int PORT = 43110;
+    public static final int DEFAULT_PORT = 43110;
+    /** Port the daemon was verified on (canonical, or alternate fallback). */
+    public static volatile int activePort = DEFAULT_PORT;
 
     private static final AtomicInteger IDS = new AtomicInteger(1);
 
@@ -58,7 +60,7 @@ public final class Rpc {
             throw new RpcException("Bad request: " + e.getMessage());
         }
         try (Socket socket = new Socket()) {
-            socket.connect(new InetSocketAddress(HOST, PORT), timeoutMs);
+            socket.connect(new InetSocketAddress(HOST, activePort), timeoutMs);
             socket.setSoTimeout(timeoutMs);
             OutputStreamWriter writer = new OutputStreamWriter(
                     socket.getOutputStream(), StandardCharsets.UTF_8);
@@ -85,7 +87,7 @@ public final class Rpc {
         } catch (RpcException e) {
             throw e;
         } catch (Exception e) {
-            throw new RpcException("Daemon unreachable at " + HOST + ":" + PORT
+            throw new RpcException("Daemon unreachable at " + HOST + ":" + activePort
                     + " — start it on Home first (" + shortMessage(e) + ").");
         }
         throw new RpcException("Daemon closed the connection without a reply.");

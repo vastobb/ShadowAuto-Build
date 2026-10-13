@@ -23,6 +23,7 @@ public final class RecoveryController {
     }
 
     private static final int PORT = 43110;
+    private static final int ALT_PORT = 43111;
 
     private final Client client;
     private final Listener listener;
@@ -55,9 +56,8 @@ public final class RecoveryController {
                 return;
             }
             if (!probe.legacy) {
-                abort("A foreign service holds port " + PORT
-                        + " (unrecognized handshake). Phantom must not kill it: "
-                        + "stop that app, then tap Recover again.");
+                fallbackOrAbort(FallbackDecider.Holder.FOREIGN,
+                        "A foreign service holds port " + PORT + " (unrecognized handshake).");
                 return;
             }
             // 2. Verified legacy-shaped responder (-32601). Narrow cleanup:
@@ -70,11 +70,12 @@ public final class RecoveryController {
             if (tryPidfileCleanup()) {
                 return;
             }
-            abort("Legacy-shaped responder on port " + PORT + ", but its process "
-                    + "cannot be identified on this build (restricted /proc and no "
-                    + "verifiable pid record). Phantom will not kill an unidentified "
-                    + "process. Reboot the device (the legacy shell does not restart "
-                    + "itself), then tap Start.");
+            // Identity cannot be established (restricted /proc, no verifiable
+            // pid record). Do NOT kill, do NOT demand a reboot: serve on a
+            // verified-free alternate port instead.
+            fallbackOrAbort(FallbackDecider.Holder.LEGACY,
+                    "Legacy-shaped responder on port " + PORT
+                            + " but its process is unidentifiable on this build.");
         } catch (Throwable e) {
             done(false, "Recovery failed: " + (e.getMessage() == null ? e.toString() : e.getMessage()));
         }
@@ -115,8 +116,7 @@ public final class RecoveryController {
         RecoveryDecider.Plan plan = RecoveryDecider.plan(verdicts);
         switch (plan.action) {
             case REFUSE:
-                abort(plan.reason + " Limitation: only positively identified "
-                        + "legacy shells are stopped.");
+                fallbackOrAbort(FallbackDecider.Holder.FOREIGN, plan.reason);
                 return true;
             case KILL_THEN_START:
                 return killThenStart(plan.killPids);
@@ -143,26 +143,19 @@ public final class RecoveryController {
      */
     private boolean tryPidfileCleanup() throws Exception {
         ExecResult pidFile = exec("cat /data/local/tmp/silent-auto.pid 2>/dev/null");
-        String pidText = pidFile.output.trim().split("\\s+")[0];
-        int pid;
-        try {
-            pid = Integer.parseInt(pidText);
-        } catch (NumberFormatException e) {
-            step("No legacy pid record found.");
-            return false;
-        }
+        int pid = PidfileCleanup.parsePid(pidFile.output);
         if (pid <= 1) {
             step("No legacy pid record found.");
             return false;
         }
         ExecResult cmd = exec("tr '\\0' ' ' </proc/" + pid + "/cmdline 2>/dev/null; echo");
-        StaleDaemon.Verdict verdict = StaleDaemon.classify(pid, cmd.output);
+        PidfileCleanup.Verdict verdict =
+                PidfileCleanup.decide(pidFile.output, cmd.output);
         step(verdict.reason);
-        if (verdict.decision != StaleDaemon.Decision.LEGACY_SHELL) {
-            step("Pid record does not identify a legacy shell — refusing.");
+        if (verdict.decision != PidfileCleanup.Decision.KILL) {
             return false;
         }
-        return killThenStart(java.util.Collections.singletonList(pid));
+        return killThenStart(java.util.Collections.singletonList(verdict.pid));
     }
 
     private boolean killThenStart(List<Integer> pids) throws Exception {
@@ -196,14 +189,51 @@ public final class RecoveryController {
         return true;
     }
 
+    private void fallbackOrAbort(FallbackDecider.Holder canonical, String why) {
+        step(why + " Trying alternate port " + ALT_PORT + "…");
+        DaemonController.HelloCheckResult alt = DaemonController.probePort(ALT_PORT);
+        FallbackDecider.Holder altKind = alt.phantom
+                ? FallbackDecider.Holder.PHANTOM
+                : (!alt.connected ? FallbackDecider.Holder.FREE
+                        : (alt.legacy ? FallbackDecider.Holder.LEGACY
+                                : FallbackDecider.Holder.FOREIGN));
+        switch (FallbackDecider.decide(canonical, altKind)) {
+            case ADOPT_ALTERNATE:
+                com.phantom.automation.rpc.Rpc.activePort = ALT_PORT;
+                done(true, "Adopted Phantom daemon on alternate port " + ALT_PORT
+                        + " (pid " + alt.pid + "). Port " + PORT
+                        + " stays with its unidentified holder.");
+                return;
+            case USE_ALTERNATE:
+                step("Alternate port is free — starting Phantom daemon there…");
+                finishStartOn(ALT_PORT);
+                return;
+            case USE_CANONICAL:
+            case REFUSE:
+            default:
+                abort("Both port " + PORT + " and alternate " + ALT_PORT + " are held "
+                        + "by services Phantom must not disturb (" + why + "). "
+                        + "Stop the unknown app(s), then tap Recover again.");
+        }
+    }
+
     private void finishStart() {
+        finishStartOn(PORT);
+    }
+
+    private void finishStartOn(int port) {
         try {
-            int result = client.startDaemon(PORT);
+            int result = client.startDaemon(port);
             if (result == com.phantom.automation.engine.EngineHost.ADOPTED) {
-                DaemonController.HelloCheckResult adopted = helloProbe();
+                DaemonController.HelloCheckResult adopted = helloProbe(port);
                 if (adopted.phantom) {
-                    done(true, "Recovered by adopting healthy daemon (pid "
-                            + adopted.pid + ").");
+                    com.phantom.automation.rpc.Rpc.activePort = port;
+                    done(true, port == PORT
+                            ? "Recovered by adopting healthy daemon (pid "
+                                    + adopted.pid + ")."
+                            : "Recovered on alternate port " + port + " (pid "
+                                    + adopted.pid + "). Port " + PORT
+                                    + " stays with its unidentified holder.");
                 } else {
                     done(false, "Adopted endpoint failed verification — tap Recover again.");
                 }
@@ -211,7 +241,7 @@ public final class RecoveryController {
             }
             if (result != com.phantom.automation.engine.EngineHost.SERVING) {
                 if (result == com.phantom.automation.engine.EngineHost.LEGACY_HOLDER) {
-                    done(false, "A verified legacy shell reappeared on port " + PORT
+                    done(false, "A verified legacy shell reappeared on port " + port
                             + " — tap Recover again.");
                     return;
                 }
@@ -220,15 +250,23 @@ public final class RecoveryController {
                         ? "Daemon refused to start (code " + result + ")." : detail);
                 return;
             }
-            DaemonController.HelloCheckResult hello = helloProbe();
+            DaemonController.HelloCheckResult hello = helloProbe(port);
             if (hello.phantom) {
-                done(true, "Recovered: phantom protocol v" + hello.version + ".");
+                com.phantom.automation.rpc.Rpc.activePort = port;
+                done(true, port == PORT
+                        ? "Recovered: phantom protocol v" + hello.version + "."
+                        : "Recovered on alternate port " + port
+                                + " (phantom protocol v" + hello.version + ").");
             } else {
                 done(false, hello.error);
             }
         } catch (Throwable e) {
             done(false, "Start failed: " + (e.getMessage() == null ? e.toString() : e.getMessage()));
         }
+    }
+
+    private DaemonController.HelloCheckResult helloProbe(int port) {
+        return DaemonController.probePort(port);
     }
 
     private DaemonController.HelloCheckResult helloProbe() {

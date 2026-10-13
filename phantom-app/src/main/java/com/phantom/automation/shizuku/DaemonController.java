@@ -5,6 +5,8 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.RemoteException;
 
+import com.phantom.automation.rpc.Rpc;
+
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
@@ -69,6 +71,7 @@ public final class DaemonController implements ServiceConnector.Listener {
         if (attempt < 0) {
             return;
         }
+        Rpc.activePort = RPC_PORT;
         emit();
         armWatchdog();
         if (connector == null) {
@@ -106,7 +109,7 @@ public final class DaemonController implements ServiceConnector.Listener {
     public void restart() {
         pendingRecovery = null;
         io.execute(() -> {
-            HelloCheck.Result probe = hello("127.0.0.1", RPC_PORT, HELLO_TIMEOUT_MS);
+            HelloCheck.Result probe = hello("127.0.0.1", Rpc.activePort, HELLO_TIMEOUT_MS);
             if (probe.ok) {
                 lifecycle.adoptRunning(now(), "Reused healthy daemon: " + probe.summary + ".");
                 emit();
@@ -178,7 +181,7 @@ public final class DaemonController implements ServiceConnector.Listener {
             if (current != DaemonLifecycle.State.RUNNING && client == null) {
                 return;
             }
-            HelloCheck.Result probe = hello("127.0.0.1", RPC_PORT, HELLO_TIMEOUT_MS);
+            HelloCheck.Result probe = hello("127.0.0.1", Rpc.activePort, HELLO_TIMEOUT_MS);
             if (probe.ok) {
                 lifecycle.adoptRunning(now(), "Verified: " + probe.summary + ".");
                 emit();
@@ -228,7 +231,7 @@ public final class DaemonController implements ServiceConnector.Listener {
             // If the endpoint is healthy, adopt it (reconcile); otherwise
             // leave the newer attempt alone.
             io.execute(() -> {
-                HelloCheck.Result probe = hello("127.0.0.1", RPC_PORT, HELLO_TIMEOUT_MS);
+                HelloCheck.Result probe = hello("127.0.0.1", Rpc.activePort, HELLO_TIMEOUT_MS);
                 if (probe.ok) {
                     this.client = service;
                     lifecycle.adoptRunning(now(), "Reconciled late bind: " + probe.summary + ".");
@@ -241,7 +244,7 @@ public final class DaemonController implements ServiceConnector.Listener {
         emit();
         io.execute(() -> {
             try {
-                int result = service.startDaemon(RPC_PORT);
+                int result = service.startDaemon(Rpc.activePort);
                 if (result != com.phantom.automation.engine.EngineHost.SERVING
                         && result != com.phantom.automation.engine.EngineHost.ADOPTED) {
                     String detail;
@@ -264,7 +267,7 @@ public final class DaemonController implements ServiceConnector.Listener {
                 // The daemon verified its own hello before reporting success,
                 // but an outdated UserService from a previous APK install may
                 // still be bound — re-check here before claiming RUNNING.
-                HelloCheck.Result hello = hello("127.0.0.1", RPC_PORT, HELLO_TIMEOUT_MS);
+                HelloCheck.Result hello = hello("127.0.0.1", Rpc.activePort, HELLO_TIMEOUT_MS);
                 if (!hello.ok) {
                     lifecycle.onFailed(now(), hello.error, attempt);
                     emit();

@@ -85,21 +85,26 @@ public final class McpSetupActivity extends Activity {
                 boolean ready = hasRequired(methods);
                 String status = "Phantom service: running (protocol v" + version
                         + (pid > 0 ? ", pid " + pid : "") + ").";
-                String api = "Control API: 127.0.0.1:43110 reachable, " + count
+                String api = "Control API: 127.0.0.1:" + com.phantom.automation.rpc.Rpc.activePort
+                        + " reachable, " + count
                         + " methods" + (ready ? "." : " — MISSING methods, reinstall Phantom.");
                 String fedora = "OpenCode (Fedora): not visible from this device. "
                         + "Stdio servers report nothing back — verify there with "
                         + "`opencode mcp list` (expect phantom connected).";
+                int port = com.phantom.automation.rpc.Rpc.activePort;
                 instructions = "Phantom MCP setup (OpenCode on Fedora):\n"
-                        + "1. adb forward tcp:43110 tcp:43110\n"
+                        + "1. adb forward tcp:" + port + " tcp:" + port + "\n"
                         + "   (bridges Fedora loopback to Android loopback; loopback-only, no LAN)\n"
+                        + "   If the daemon serves the alternate port, forward that one instead\n"
+                        + "   and set SHADOWAUTO_PORT=" + port + " in the config below.\n"
                         + "2. pip install \"phantom-mcp @ "
                         + "git+https://github.com/vastobb/ShadowAuto-Build.git#subdirectory=mcp\"\n"
                         + "3. opencode.json mcp.servers.phantom: "
-                        + "{\"type\":\"local\",\"command\":[\"phantom-mcp\"]}\n"
+                        + "{\"type\":\"local\",\"command\":[\"phantom-mcp\"],"
+                        + "\"environment\":{\"SHADOWAUTO_PORT\":\"" + port + "\"}}\n"
                         + "4. opencode mcp list\n"
                         + "Daemon verified here: phantom protocol v" + version
-                        + ", " + count + " methods.";
+                        + ", " + count + " methods, port " + port + ".";
                 runOnUiThread(() -> {
                     statusLine.setText(status);
                     apiLine.setText(api + "\n" + fedora);

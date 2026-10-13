@@ -207,7 +207,7 @@ public final class SessionDetailActivity extends Activity implements RpcClient.L
         io.execute(() -> {
             try {
                 if (rpc == null) {
-                    rpc = new RpcClient("127.0.0.1", 43110, this);
+                    rpc = new RpcClient("127.0.0.1", com.phantom.automation.rpc.Rpc.activePort, this);
                 }
                 rpc.send("status", new JSONObject());
             } catch (Throwable ignored) {

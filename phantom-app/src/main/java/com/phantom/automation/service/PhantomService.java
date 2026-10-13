@@ -118,7 +118,7 @@ public final class PhantomService extends Service implements RpcClient.Listener 
     private void connectRpc() {
         io.execute(() -> {
             try {
-                rpc = new RpcClient("127.0.0.1", 43110, PhantomService.this);
+                rpc = new RpcClient("127.0.0.1", com.phantom.automation.rpc.Rpc.activePort, PhantomService.this);
                 rpc.send("status", new JSONObject());
             } catch (Throwable ignored) {
             }
