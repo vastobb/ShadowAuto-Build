@@ -44,10 +44,14 @@
 - Daemon lifecycle: `DaemonLifecycle` state machine (IDLE/BINDING/STARTING/
   RUNNING/RECOVERING/ERROR) with 20s/30s/90s deadlines — no step can stick
   forever; duplicates suppressed; disconnects land in ERROR; transitions
-  journaled (`DiagLog`) and logged to logcat (`PhantomDaemon`). `hello`
-  parsing isolated in `HelloCheck` (legacy/foreign/outdated/missing-method
-  verdicts). Recovery runs through the UserService `exec` transact and only
-  stops positively identified legacy shells.
+  journaled (`DiagLog`) and logged to logcat (`PhantomDaemon`). Attempt
+  generations tag every bind/start/recover: stale callbacks cannot corrupt
+  a newer attempt, while a late-but-verified endpoint is adopted
+  (`adoptRunning`) instead of leaving a live daemon reported dead.
+  Restart reuses a healthy daemon; `refresh()` re-verifies hello on every
+  resume (binder-ok/RPC-dead distinguished). `hello` parsing isolated in
+  `HelloCheck` (unproven listeners are never called legacy — only recovery
+  via kernel tables may claim that, through `RecoveryDecider`).
 - MCP: installable `phantom-mcp` console script (`mcp/pyproject.toml`,
   install-verified with 27 tools); path-free `opencode.json.example`;
   Android setup screen carries no repo path and separates daemon status,
