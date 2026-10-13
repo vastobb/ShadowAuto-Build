@@ -81,8 +81,10 @@ public final class McpSetupActivity extends Activity {
                 JSONArray methods = hello.optJSONArray("methods");
                 int count = methods == null ? 0 : methods.length();
                 int version = hello.optInt("version");
+                int pid = hello.optInt("pid", -1);
                 boolean ready = hasRequired(methods);
-                String status = "Phantom service: running (protocol v" + version + ").";
+                String status = "Phantom service: running (protocol v" + version
+                        + (pid > 0 ? ", pid " + pid : "") + ").";
                 String api = "Control API: 127.0.0.1:43110 reachable, " + count
                         + " methods" + (ready ? "." : " — MISSING methods, reinstall Phantom.");
                 String fedora = "OpenCode (Fedora): not visible from this device. "
