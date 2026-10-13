@@ -29,6 +29,9 @@ public final class DaemonLifecycle {
     private String detail = "Idle.";
     private long deadlineMs;
     private long nowMs;
+    /** Attempt counter: every request bumps it; callbacks carry the attempt
+     * they belong to so stale async work cannot corrupt a newer attempt. */
+    private long generation;
 
     public DaemonLifecycle(DiagLog diag) {
         this.diag = diag;
@@ -42,35 +45,61 @@ public final class DaemonLifecycle {
         return detail;
     }
 
-    /** Returns false when the request is a duplicate and was suppressed. */
-    public synchronized boolean requestStart(long nowMs) {
+    public synchronized long generation() {
+        return generation;
+    }
+
+    /** Returns the new attempt id, or -1 when the request was suppressed. */
+    public synchronized long requestStart(long nowMs) {
         this.nowMs = nowMs;
         if (state == State.BINDING || state == State.STARTING || state == State.RECOVERING) {
-            diag.add("start suppressed (already " + state + ")");
-            return false;
+            diag.add("start suppressed (already " + state + ", gen " + generation + ")");
+            return -1;
         }
+        generation++;
         transition(State.BINDING, "Binding privileged service…", nowMs + BIND_TIMEOUT_MS);
-        return true;
+        return generation;
     }
 
-    public synchronized boolean requestRestart(long nowMs) {
+    /** Returns the new attempt id. Restart always proceeds. */
+    public synchronized long requestRestart(long nowMs) {
         this.nowMs = nowMs;
+        generation++;
         transition(State.BINDING, "Restarting privileged service…", nowMs + BIND_TIMEOUT_MS);
-        return true;
+        return generation;
     }
 
-    public synchronized boolean requestRecover(long nowMs) {
+    /** Returns the new attempt id, or -1 when already recovering. */
+    public synchronized long requestRecover(long nowMs) {
         this.nowMs = nowMs;
         if (state == State.RECOVERING) {
-            diag.add("recover suppressed (already RECOVERING)");
+            diag.add("recover suppressed (already RECOVERING, gen " + generation + ")");
+            return -1;
+        }
+        generation++;
+        transition(State.RECOVERING, "Recovering stale service…", nowMs + RECOVER_TIMEOUT_MS);
+        return generation;
+    }
+
+    /** False when the callback belongs to an older attempt: ignore it. */
+    public synchronized boolean checkAttempt(long attempt) {
+        if (attempt != generation) {
+            diag.add("stale callback ignored (attempt " + attempt
+                    + ", current gen " + generation + ")");
             return false;
         }
-        transition(State.RECOVERING, "Recovering stale service…", nowMs + RECOVER_TIMEOUT_MS);
         return true;
     }
 
     public synchronized void onBound(long nowMs) {
+        onBound(nowMs, generation);
+    }
+
+    public synchronized void onBound(long nowMs, long attempt) {
         this.nowMs = nowMs;
+        if (!checkAttempt(attempt)) {
+            return;
+        }
         if (state != State.BINDING && state != State.RECOVERING) {
             diag.add("late bind ignored in " + state);
             return;
@@ -83,7 +112,14 @@ public final class DaemonLifecycle {
     }
 
     public synchronized void onStarted(long nowMs, String summary) {
+        onStarted(nowMs, summary, generation);
+    }
+
+    public synchronized void onStarted(long nowMs, String summary, long attempt) {
         this.nowMs = nowMs;
+        if (!checkAttempt(attempt)) {
+            return;
+        }
         if (state == State.STARTING || state == State.RECOVERING || state == State.BINDING) {
             transition(State.RUNNING, summary, 0);
         } else {
@@ -91,8 +127,28 @@ public final class DaemonLifecycle {
         }
     }
 
-    public synchronized void onFailed(long nowMs, String message) {
+    /**
+     * Adopt a freshly verified daemon as RUNNING even from ERROR/IDLE.
+     * Used when a late callback proves the endpoint healthy (reconcile
+     * instead of leaving a running daemon reported as dead).
+     */
+    public synchronized void adoptRunning(long nowMs, String summary) {
         this.nowMs = nowMs;
+        if (state == State.RUNNING) {
+            return;
+        }
+        transition(State.RUNNING, summary, 0);
+    }
+
+    public synchronized void onFailed(long nowMs, String message) {
+        onFailed(nowMs, message, generation);
+    }
+
+    public synchronized void onFailed(long nowMs, String message, long attempt) {
+        this.nowMs = nowMs;
+        if (!checkAttempt(attempt)) {
+            return;
+        }
         transition(State.ERROR, message, 0);
     }
 

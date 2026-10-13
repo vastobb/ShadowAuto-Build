@@ -47,6 +47,7 @@ public final class DaemonController implements ServiceConnector.Listener {
     private ServiceConnector connector;
     private PhantomUserService.Client client;
     private RecoveryController.Listener pendingRecovery;
+    private long bindAttempt;
     private boolean released;
 
     public DaemonController(Context context, Listener listener) {
@@ -64,7 +65,8 @@ public final class DaemonController implements ServiceConnector.Listener {
     }
 
     public void start() {
-        if (!lifecycle.requestStart(now())) {
+        long attempt = lifecycle.requestStart(now());
+        if (attempt < 0) {
             return;
         }
         emit();
@@ -72,7 +74,13 @@ public final class DaemonController implements ServiceConnector.Listener {
         if (connector == null) {
             connector = new ServiceConnector(context, this);
         }
-        connector.bind();
+        bindAttempt = attempt;
+        boolean fresh = connector.bind();
+        if (!fresh && client != null) {
+            // Reused an existing live binding: drive the start flow now
+            // instead of waiting for a callback that already happened.
+            onConnected(client, attempt);
+        }
     }
 
     public void stop() {
@@ -94,10 +102,16 @@ public final class DaemonController implements ServiceConnector.Listener {
         });
     }
 
-    /** Stop, rebind, and start again. */
+    /** Stop, rebind, and start again — reusing the service when healthy. */
     public void restart() {
         pendingRecovery = null;
         io.execute(() -> {
+            HelloCheck.Result probe = hello("127.0.0.1", RPC_PORT, HELLO_TIMEOUT_MS);
+            if (probe.ok) {
+                lifecycle.adoptRunning(now(), "Reused healthy daemon: " + probe.summary + ".");
+                emit();
+                return;
+            }
             try {
                 if (client != null) {
                     client.stopDaemon();
@@ -109,12 +123,13 @@ public final class DaemonController implements ServiceConnector.Listener {
             if (connector != null) {
                 connector.unbind();
             }
-            lifecycle.requestRestart(now());
+            long attempt = lifecycle.requestRestart(now());
             emit();
             armWatchdog();
             if (connector == null) {
                 connector = new ServiceConnector(context, this);
             }
+            bindAttempt = attempt;
             connector.bind();
         });
     }
@@ -127,22 +142,54 @@ public final class DaemonController implements ServiceConnector.Listener {
     public void recover(RecoveryController.Listener recovery) {
         pendingRecovery = null;
         if (client != null) {
-            lifecycle.requestRecover(now());
+            long attempt = lifecycle.requestRecover(now());
+            if (attempt < 0) {
+                return;
+            }
             emit();
             armWatchdog();
             RecoveryController controller = new RecoveryController(client,
-                    wrapRecovery(recovery));
+                    wrapRecovery(recovery, attempt));
             io.execute(controller::run);
             return;
         }
         pendingRecovery = recovery;
-        lifecycle.requestRecover(now());
+        long attempt = lifecycle.requestRecover(now());
+        if (attempt < 0) {
+            pendingRecovery = null;
+            return;
+        }
         emit();
         armWatchdog();
         if (connector == null) {
             connector = new ServiceConnector(context, this);
         }
+        bindAttempt = attempt;
         connector.bind();
+    }
+
+    /**
+     * Re-query actual state: binder liveness plus RPC handshake. Never
+     * replays cached RUNNING — a fresh hello is required to stay RUNNING.
+     */
+    public void refresh() {
+        io.execute(() -> {
+            DaemonLifecycle.State current = lifecycle.state();
+            if (current != DaemonLifecycle.State.RUNNING && client == null) {
+                return;
+            }
+            HelloCheck.Result probe = hello("127.0.0.1", RPC_PORT, HELLO_TIMEOUT_MS);
+            if (probe.ok) {
+                lifecycle.adoptRunning(now(), "Verified: " + probe.summary + ".");
+                emit();
+            } else if (client != null) {
+                lifecycle.onFailed(now(), "Binder connected but RPC unhealthy: " + probe.error);
+                emit();
+            } else {
+                lifecycle.onFailed(now(), probe.error);
+                emit();
+            }
+        });
     }
 
     public void release() {
@@ -161,18 +208,36 @@ public final class DaemonController implements ServiceConnector.Listener {
 
     @Override
     public void onConnected(PhantomUserService.Client service) {
+        onConnected(service, bindAttempt);
+    }
+
+    private void onConnected(PhantomUserService.Client service, long attempt) {
         this.client = service;
         RecoveryController.Listener recovery = pendingRecovery;
         pendingRecovery = null;
         if (recovery != null) {
-            lifecycle.onBound(now());
+            lifecycle.onBound(now(), attempt);
             emit();
             RecoveryController controller = new RecoveryController(service,
-                    wrapRecovery(recovery));
+                    wrapRecovery(recovery, attempt));
             io.execute(controller::run);
             return;
         }
-        lifecycle.onBound(now());
+        if (attempt != lifecycle.generation()) {
+            // Late callback from an older attempt: verify before trusting.
+            // If the endpoint is healthy, adopt it (reconcile); otherwise
+            // leave the newer attempt alone.
+            io.execute(() -> {
+                HelloCheck.Result probe = hello("127.0.0.1", RPC_PORT, HELLO_TIMEOUT_MS);
+                if (probe.ok) {
+                    this.client = service;
+                    lifecycle.adoptRunning(now(), "Reconciled late bind: " + probe.summary + ".");
+                    emit();
+                }
+            });
+            return;
+        }
+        lifecycle.onBound(now(), attempt);
         emit();
         io.execute(() -> {
             try {
@@ -182,7 +247,7 @@ public final class DaemonController implements ServiceConnector.Listener {
                     if (detail == null || detail.isEmpty()) {
                         detail = "Daemon refused to start (code " + result + ").";
                     }
-                    lifecycle.onFailed(now(), detail);
+                    lifecycle.onFailed(now(), detail, attempt);
                     emit();
                     return;
                 }
@@ -191,15 +256,16 @@ public final class DaemonController implements ServiceConnector.Listener {
                 // still be bound — re-check here before claiming RUNNING.
                 HelloCheck.Result hello = hello("127.0.0.1", RPC_PORT, HELLO_TIMEOUT_MS);
                 if (!hello.ok) {
-                    lifecycle.onFailed(now(), hello.error);
+                    lifecycle.onFailed(now(), hello.error, attempt);
                     emit();
                     return;
                 }
-                lifecycle.onStarted(now(), "Daemon running: " + hello.summary + ".");
+                lifecycle.onStarted(now(),
+                        "Daemon running: " + hello.summary + ".", attempt);
                 emit();
             } catch (RemoteException e) {
                 lifecycle.onFailed(now(),
-                        "Binder call failed: " + ServiceConnector.describeError(e));
+                        "Binder call failed: " + ServiceConnector.describeError(e), attempt);
                 emit();
             }
         });
@@ -218,7 +284,8 @@ public final class DaemonController implements ServiceConnector.Listener {
         emit();
     }
 
-    private RecoveryController.Listener wrapRecovery(RecoveryController.Listener recovery) {
+    private RecoveryController.Listener wrapRecovery(RecoveryController.Listener recovery,
+                                                     long attempt) {
         return new RecoveryController.Listener() {
             @Override
             public void onStep(String message) {
@@ -231,9 +298,9 @@ public final class DaemonController implements ServiceConnector.Listener {
             public void onDone(boolean ok, String message) {
                 recovery.onDone(ok, message);
                 if (ok) {
-                    lifecycle.onStarted(now(), message);
+                    lifecycle.onStarted(now(), message, attempt);
                 } else {
-                    lifecycle.onFailed(now(), message);
+                    lifecycle.onFailed(now(), message, attempt);
                 }
                 emit();
             }

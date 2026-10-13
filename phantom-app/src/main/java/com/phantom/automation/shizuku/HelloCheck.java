@@ -47,8 +47,13 @@ public final class HelloCheck {
         }
         if (!line.contains("\"app\":\"" + APP + "\"")) {
             if (line.contains("-32601")) {
-                return fail("A stale legacy shell answers on port " + port
-                        + " (no hello/listApps). Use Recover — no manual adb needed.");
+                // -32601 alone only proves "no hello here": it may be the
+                // legacy shell OR any foreign listener. Positive
+                // identification happens in recovery (kernel tables), never
+                // from this line alone.
+                return fail("The port holder does not speak hello (often a "
+                        + "stale legacy shell, but not proven). Use Recover to "
+                        + "identify it — nothing was killed.");
             }
             return fail("A foreign service answers on port " + port
                     + ". Free the port (stop that app), then Start again.");

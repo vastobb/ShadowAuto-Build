@@ -31,10 +31,11 @@ public final class ServiceConnector {
         this.listener = listener;
     }
 
-    public void bind() {
+    /** Returns true when a fresh bind was issued, false when reusing. */
+    public boolean bind() {
         if (connection != null) {
-            Log.i(TAG, "bind: already bound, skipping duplicate");
-            return;
+            Log.i(TAG, "bind: reusing existing binding (no fresh bind issued)");
+            return false;
         }
         ComponentName component = new ComponentName(context.getPackageName(),
                 PhantomUserService.class.getName());
@@ -80,6 +81,7 @@ public final class ServiceConnector {
             Shizuku.bindUserService(args, connection);
             Log.i(TAG, "bind: Shizuku.bindUserService returned without exception; "
                     + "waiting for onServiceConnected");
+            return true;
         } catch (Throwable e) {
             Log.e(TAG, "bind: Shizuku.bindUserService threw", e);
             connection = null;
@@ -88,6 +90,8 @@ public final class ServiceConnector {
                 listener.onError("bind failed: " + e
                         + ". Open the Shizuku app and verify it is running.");
             }
+            return false;
+        }
         }
     }
 

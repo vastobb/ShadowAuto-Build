@@ -30,8 +30,9 @@ public final class HelloCheckTest {
     public void legacyDaemonIsIdentifiedNotHidden() {
         HelloCheck.Result result = HelloCheck.check(LEGACY, 43110);
         assertFalse(result.ok);
-        assertTrue(result.error.contains("legacy"));
-        assertTrue(result.error.contains("Recover"));
+        // -32601 alone must NOT positively claim legacy: recovery identifies.
+        assertTrue(result.error.contains("not proven"));
+        assertTrue(result.error.contains("Use Recover"));
     }
 
     @Test

@@ -23,7 +23,6 @@ public final class RecoveryController {
     }
 
     private static final int PORT = 43110;
-    private static final String LEGACY_PID_FILE = "/data/local/tmp/silent-auto.pid";
 
     private final Client client;
     private final Listener listener;
@@ -65,7 +64,6 @@ public final class RecoveryController {
                         + "stop the app that serves port " + PORT + ", then Start.");
                 return;
             }
-            String pidFile = exec("cat " + LEGACY_PID_FILE + " 2>/dev/null").output.trim();
             List<StaleDaemon.Verdict> verdicts = new ArrayList<>();
             for (int pid : pids) {
                 if (checkCancelled()) {
@@ -74,55 +72,48 @@ public final class RecoveryController {
                 String cmdline = exec("tr '\\0' ' ' </proc/" + pid + "/cmdline 2>/dev/null; echo").output;
                 verdicts.add(StaleDaemon.classify(pid, cmdline));
             }
-            boolean legacyPidFileMatch = false;
             for (StaleDaemon.Verdict verdict : verdicts) {
                 step(verdict.reason);
-                if (verdict.decision == StaleDaemon.Decision.LEGACY_SHELL
-                        && String.valueOf(verdict.pid).equals(pidFile)) {
-                    legacyPidFileMatch = true;
-                }
             }
-            List<StaleDaemon.Verdict> legacy = filter(verdicts, StaleDaemon.Decision.LEGACY_SHELL);
-            List<StaleDaemon.Verdict> ours = filter(verdicts, StaleDaemon.Decision.OURS);
-            List<StaleDaemon.Verdict> foreign = filter(verdicts, StaleDaemon.Decision.REFUSE);
-            if (!foreign.isEmpty()) {
-                abort("Port " + PORT + " is held by an unrecognized process that "
-                        + "Phantom must not kill (" + foreign.get(0).reason + "). Limitation: "
-                        + "only positively identified legacy shells are stopped. Free the "
-                        + "port (stop that app) and tap Recover again."
-                        + (legacyPidFileMatch ? "" : ""));
-                return;
-            }
-            if (!legacy.isEmpty()) {
-                for (StaleDaemon.Verdict verdict : legacy) {
-                    if (checkCancelled()) {
-                        return;
+            RecoveryDecider.Plan plan = RecoveryDecider.plan(verdicts);
+            switch (plan.action) {
+                case REFUSE:
+                    abort(plan.reason + " Limitation: only positively identified "
+                            + "legacy shells are stopped.");
+                    return;
+                case KILL_THEN_START:
+                    for (int pid : plan.killPids) {
+                        if (checkCancelled()) {
+                            return;
+                        }
+                        step("Stopping legacy shell pid " + pid + "…");
+                        ExecResult kill = exec("kill " + pid, 5000);
+                        if (kill.exit != 0) {
+                            abort("Could not stop legacy pid " + pid + " (kill exit "
+                                    + kill.exit + "). It may have privileges Phantom "
+                                    + "lacks. Reboot, or stop it from its own app.");
+                            return;
+                        }
                     }
-                    step("Stopping legacy shell pid " + verdict.pid + "…");
-                    ExecResult kill = exec("kill " + verdict.pid, 5000);
-                    if (kill.exit != 0) {
-                        abort("Could not stop legacy pid " + verdict.pid + " (kill exit "
-                                + kill.exit + "). It may have been started with privileges "
-                                + "Phantom lacks. Reboot, or stop it from its own app.");
-                        return;
+                    sleep(1200);
+                    step("Legacy shell stopped — starting Phantom daemon…");
+                    finishStart();
+                    return;
+                case RESTART_OURS:
+                    step(plan.reason);
+                    try {
+                        client.stopDaemon();
+                    } catch (Throwable ignored) {
                     }
-                }
-                sleep(1200);
-                step("Legacy shell stopped — starting Phantom daemon…");
-                finishStart();
-                return;
+                    sleep(800);
+                    finishStart();
+                    return;
+                case START:
+                default:
+                    step(plan.reason);
+                    finishStart();
+                    return;
             }
-            if (!ours.isEmpty()) {
-                step("Port is held by Phantom itself — restarting…");
-                try {
-                    client.stopDaemon();
-                } catch (Throwable ignored) {
-                }
-                sleep(800);
-                finishStart();
-                return;
-            }
-            abort("No actionable owner found.");
         } catch (Throwable e) {
             done(false, "Recovery failed: " + (e.getMessage() == null ? e.toString() : e.getMessage()));
         }
@@ -187,16 +178,5 @@ public final class RecoveryController {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
-    }
-
-    private static List<StaleDaemon.Verdict> filter(
-            List<StaleDaemon.Verdict> verdicts, StaleDaemon.Decision decision) {
-        List<StaleDaemon.Verdict> out = new ArrayList<>();
-        for (StaleDaemon.Verdict verdict : verdicts) {
-            if (verdict.decision == decision) {
-                out.add(verdict);
-            }
-        }
-        return out;
     }
 }
