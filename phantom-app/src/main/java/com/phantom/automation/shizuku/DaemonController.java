@@ -242,10 +242,20 @@ public final class DaemonController implements ServiceConnector.Listener {
         io.execute(() -> {
             try {
                 int result = service.startDaemon(RPC_PORT);
-                if (result != 0) {
-                    String detail = service.getError();
-                    if (detail == null || detail.isEmpty()) {
-                        detail = "Daemon refused to start (code " + result + ").";
+                if (result != com.phantom.automation.engine.EngineHost.SERVING
+                        && result != com.phantom.automation.engine.EngineHost.ADOPTED) {
+                    String detail;
+                    if (result == com.phantom.automation.engine.EngineHost.LEGACY_HOLDER) {
+                        detail = service.getError();
+                        if (detail == null || detail.isEmpty()) {
+                            detail = "A verified legacy shell holds the port. "
+                                    + "Tap Recover for targeted cleanup.";
+                        }
+                    } else {
+                        detail = service.getError();
+                        if (detail == null || detail.isEmpty()) {
+                            detail = "Daemon refused to start (code " + result + ").";
+                        }
                     }
                     lifecycle.onFailed(now(), detail, attempt);
                     emit();
@@ -261,7 +271,10 @@ public final class DaemonController implements ServiceConnector.Listener {
                     return;
                 }
                 lifecycle.onStarted(now(),
-                        "Daemon running: " + hello.summary + ".", attempt);
+                        result == com.phantom.automation.engine.EngineHost.ADOPTED
+                                ? "Daemon running (adopted healthy endpoint): "
+                                        + hello.summary + "."
+                                : "Daemon running: " + hello.summary + ".", attempt);
                 emit();
             } catch (RemoteException e) {
                 lifecycle.onFailed(now(),
@@ -356,6 +369,51 @@ public final class DaemonController implements ServiceConnector.Listener {
 
     private static long now() {
         return System.currentTimeMillis();
+    }
+
+    /** Raw endpoint classification for recovery decisions. Single shot. */
+    static final class HelloCheckResult {
+        boolean connected;
+        boolean phantom;
+        boolean legacy;
+        int version;
+        int pid;
+        String error = "";
+    }
+
+    static HelloCheckResult probePort(int port) {
+        HelloCheckResult out = new HelloCheckResult();
+        try (Socket socket = new Socket()) {
+            socket.connect(new InetSocketAddress("127.0.0.1", port), 1500);
+            socket.setSoTimeout(1500);
+            OutputStreamWriter writer = new OutputStreamWriter(
+                    socket.getOutputStream(), StandardCharsets.UTF_8);
+            writer.write("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"hello\",\"params\":{}}\n");
+            writer.flush();
+            BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (!line.contains("\"id\":1")) {
+                    continue;
+                }
+                out.connected = true;
+                if (line.contains("\"app\":\"phantom\"")) {
+                    out.phantom = true;
+                    out.version = HelloCheck.parseVersion(line);
+                    out.pid = HelloCheck.parsePid(line);
+                } else if (line.contains("-32601")) {
+                    out.legacy = true;
+                } else {
+                    out.error = "foreign responder";
+                }
+                return out;
+            }
+            out.error = "closed without hello";
+        } catch (Throwable e) {
+            out.error = e.getMessage() == null ? e.toString() : e.getMessage();
+        }
+        return out;
     }
 
     /** Loopback hello handshake with identity + capability validation. */

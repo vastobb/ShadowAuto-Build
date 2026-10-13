@@ -50,7 +50,8 @@ class MockDaemon(threading.Thread):
 def phantom_handler(method, params, rid):
     if method == "hello":
         return {"jsonrpc": "2.0", "id": rid,
-                "result": {"app": "phantom", "version": 2, "methods": METHODS}}
+                "result": {"app": "phantom", "version": 2, "pid": 4242,
+                           "methods": METHODS}}
     if method == "openSession":
         return {"jsonrpc": "2.0", "id": rid,
                 "result": {"sessionId": params.get("sessionId") or "mcp-1",
@@ -88,6 +89,7 @@ class HandshakeTest(unittest.TestCase):
         info = self._rpc(self._server(phantom_handler)).require_phantom()
         self.assertEqual(info["app"], "phantom")
         self.assertIn("listApps", info["methods"])
+        self.assertEqual(info["pid"], 4242)
 
     def test_session_creation_routes(self):
         reply = self._rpc(self._server(phantom_handler)).open_session("s9", 720, 1280, "avc")

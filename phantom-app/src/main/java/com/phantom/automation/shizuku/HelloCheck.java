@@ -128,4 +128,28 @@ public final class HelloCheck {
         }
         return methods;
     }
+
+    static int parsePid(String line) {
+        if (line == null) {
+            return -1;
+        }
+        int key = line.indexOf("\"pid\"");
+        if (key < 0) {
+            return -1;
+        }
+        int colon = line.indexOf(':', key);
+        if (colon < 0) {
+            return -1;
+        }
+        int end = colon + 1;
+        while (end < line.length() && (Character.isDigit(line.charAt(end))
+                || line.charAt(end) == ' ' || line.charAt(end) == '-')) {
+            end++;
+        }
+        try {
+            return Integer.parseInt(line.substring(colon + 1, end).trim());
+        } catch (NumberFormatException e) {
+            return -1;
+        }
+    }
 }

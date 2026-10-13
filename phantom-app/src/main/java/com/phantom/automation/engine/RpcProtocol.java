@@ -37,6 +37,11 @@ public final class RpcProtocol {
         JsonObject out = new JsonObject();
         out.addProperty("app", APP);
         out.addProperty("version", VERSION);
+        try {
+            out.addProperty("pid", android.os.Process.myPid());
+        } catch (Throwable ignored) {
+            out.addProperty("pid", -1);
+        }
         JsonArray methods = new JsonArray();
         for (String method : METHODS) {
             methods.add(method);

@@ -66,4 +66,12 @@ public final class HelloCheckTest {
         HelloCheck.Result result = HelloCheck.check(null, 43110);
         assertFalse(result.ok);
     }
+
+    @Test
+    public void pidParsed() {
+        assertEquals(4242, HelloCheck.parsePid(
+                "{\"id\":1,\"result\":{\"app\":\"phantom\",\"pid\":4242}}"));
+        assertEquals(-1, HelloCheck.parsePid("{\"id\":1,\"result\":{}}"));
+        assertEquals(-1, HelloCheck.parsePid(null));
+    }
 }
