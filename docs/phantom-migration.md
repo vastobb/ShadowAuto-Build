@@ -58,8 +58,12 @@
   reported, one retry on mid-claim races. `hello` carries the daemon pid
   (shown on Home/MCP/diagnostics). Recovery is hello-first (adopt
   healthy), kernel tables best-effort, then narrow pidfile+cmdline
-  cleanup with post-kill verification; kills are never based on port
-  alone and user-facing messages contain no manual-adb kill commands.
+  cleanup (`PidfileCleanup`, tested) with post-kill verification; kills
+  are never based on port alone and user-facing messages contain no
+  manual-adb kill commands. When the holder cannot be identified, recovery
+  serves on verified-free alternate port 43111 (`FallbackDecider`,
+  tested) instead of demanding a reboot; all UI/service clients follow
+  `Rpc.activePort`, and MCP instructions render the live port.
 - MCP: installable `phantom-mcp` console script (`mcp/pyproject.toml`,
   install-verified with 27 tools); path-free `opencode.json.example`;
   Android setup screen carries no repo path and separates daemon status,
