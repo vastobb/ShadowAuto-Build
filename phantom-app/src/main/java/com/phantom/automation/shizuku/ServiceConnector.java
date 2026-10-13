@@ -92,7 +92,6 @@ public final class ServiceConnector {
             }
             return false;
         }
-        }
     }
 
     public void unbind() {
