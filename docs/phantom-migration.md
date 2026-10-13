@@ -51,7 +51,15 @@
   Restart reuses a healthy daemon; `refresh()` re-verifies hello on every
   resume (binder-ok/RPC-dead distinguished). `hello` parsing isolated in
   `HelloCheck` (unproven listeners are never called legacy — only recovery
-  via kernel tables may claim that, through `RecoveryDecider`).
+  may claim that, through `RecoveryDecider`).
+- Port claim by handshake (`PortClaim` + `EngineHost` result codes
+  SERVING/ADOPTED/LEGACY_HOLDER): probe before bind (healthy Phantom
+  adopted, no new socket), bind when free, verified legacy/foreign
+  reported, one retry on mid-claim races. `hello` carries the daemon pid
+  (shown on Home/MCP/diagnostics). Recovery is hello-first (adopt
+  healthy), kernel tables best-effort, then narrow pidfile+cmdline
+  cleanup with post-kill verification; kills are never based on port
+  alone and user-facing messages contain no manual-adb kill commands.
 - MCP: installable `phantom-mcp` console script (`mcp/pyproject.toml`,
   install-verified with 27 tools); path-free `opencode.json.example`;
   Android setup screen carries no repo path and separates daemon status,
